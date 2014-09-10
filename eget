@@ -1,0 +1,35 @@
+#!/bin/sh
+
+WGET="wget -q"
+
+URL=$(dirname $1)
+if echo "$URL" | grep -q "^ftp://" ; then
+    $WGET $URL && exit 0
+fi
+MASK=$(basename $1)
+MYTMPDIR="$(mktemp -d)"
+DIRALLFILES="$MYTMPDIR/files/"
+
+get_index(){
+    INDEX=$MYTMPDIR/index
+    $WGET $URL -O $INDEX
+}
+
+save_temp_files(){
+    mkdir -p $DIRALLFILES
+    ALLFILES="$MYTMPDIR/allfiles"
+    cat $INDEX | grep -o -E 'href="([^\*/"#]+)"' | cut -d'"' -f2 > $ALLFILES 
+    while read line ; do
+	touch $DIRALLFILES/$line
+    done <$ALLFILES
+}
+
+sort_files(){
+    for line in $DIRALLFILES/$MASK ; do
+	$WGET $URL/`basename "$line"` -P $CURRENTDIR/
+    done
+}
+
+get_index
+save_temp_files
+sort_files
