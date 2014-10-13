@@ -2,12 +2,14 @@
 
 EGET=../eget
 
-test(){
+test_download(){
 echo "Download $1"
 $EGET $1
 file $(basename $1)
 rm -rf $(basename $1)
 }
 
-test ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
-test ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
+#test_download ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
+#test_download ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
+test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test/
+#test_download http://updates.etersoft.ru/pub/people/danil/eget_test/
