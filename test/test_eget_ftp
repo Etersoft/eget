@@ -1,0 +1,13 @@
+#!/bin/sh
+
+EGET=../eget
+
+test(){
+echo "Download $1"
+$EGET $1
+file $(basename $1)
+rm -rf $(basename $1)
+}
+
+test ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
+test ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
