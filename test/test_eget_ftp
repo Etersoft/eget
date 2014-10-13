@@ -1,7 +1,7 @@
 #!/bin/sh
 
-EGET="bash -x /srv/danil/Projects/eget/eget"
-#EGET="/srv/danil/Projects/eget/eget"
+#EGET="bash -x /srv/danil/Projects/eget/eget"
+EGET="/srv/danil/Projects/eget/eget"
 
 test_download(){
 echo "Download $1"
@@ -22,11 +22,8 @@ test_download ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
 test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/*
 test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/*
 test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/vm-profile.scm
-test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/ #Download index file #MAYBE_BUG
+test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/ #Download index file like a wget
 test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/
-#wget ftp://updates.etersoft.ru/pub/people/danil/eget_test2/ # Compare with wget result
 
 #Not work test, failed on long name
 #test_download http://updates.etersoft.ru/pub/people/danil/eget_test/%d0%a1%d0%b0%d0%bd%d0%b4%d0%b5%d1%80%d1%81%20%d0%91.%2c%20%d0%9a%d1%83%d0%bc%d0%b0%d1%80%d0%b0%d0%bd%d0%b0%d1%82%d1%83%d0%bd%d0%b3%20%d0%a7.%20-%20ActionScript%203.0.%20%d0%a8%d0%b0%d0%b1%d0%bb%d0%be%d0%bd%d1%8b%20%d0%bf%d1%80%d0%be%d0%b5%d0%ba%d1%82%d0%b8%d1%80%d0%be%d0%b2%d0%b0%d0%bd%d0%b8%d1%8f%20-%202011.pdf
-#If file non exist download directory #MAYBE_BUG #TODO
-#test_download http://updates.etersoft.ru/pub/people/danil/eget_test/__NON_EXIST_FILE.FILE
