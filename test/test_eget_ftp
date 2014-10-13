@@ -4,12 +4,18 @@ EGET=../eget
 
 test_download(){
 echo "Download $1"
+
+MYFILE=$(basename $1)/$(basename $1)
+MYDIR=./$(basename $1)
+mkdir -p $MYDIR
+cd $MYDIR
 $EGET $1
-file $(basename $1)
-rm -rf $(basename $1)
+cd -
+file $MYFILE
+#rm -rf $MYDIR
 }
 
 #test_download ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
 #test_download ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
-test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test/
+test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test/*
 #test_download http://updates.etersoft.ru/pub/people/danil/eget_test/
