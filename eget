@@ -1,7 +1,7 @@
 #!/bin/sh
 # eget - simply shell on wget for loading directories over http
 # Example use:
-# eget 
+# eget ftp://ftp.altlinux.ru/pub/security/ssl/*
 #
 # Copyright (C) 2014-2014  Etersoft
 # Copyright (C) 2014-2014  Daniil Mikhailov <danil@etersoft.ru>
