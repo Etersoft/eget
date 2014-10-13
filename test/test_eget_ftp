@@ -5,7 +5,7 @@ EGET=/srv/danil/Projects/eget/eget
 test_download(){
 echo "Download $1"
 
-MYDIR=./$(date +test-%H:%M:%S)
+MYDIR=./$(date +test-%H:%M:%S.%M)
 mkdir -p $MYDIR
 MYFILE=$MYDIR/$(basename $1)
 cd $MYDIR
@@ -13,6 +13,7 @@ $EGET $1
 cd -
 file $MYFILE && echo OK || echo FAIL
 #rm -rf $MYDIR
+sleep 1
 }
 
 test_download ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
