@@ -6,7 +6,7 @@ test_download(){
 echo "Download $1"
 
 MYFILE=$(basename $1)/$(basename $1)
-MYDIR=./$(basename $1)
+MYDIR=./$(date +test-%H:%M)
 mkdir -p $MYDIR
 cd $MYDIR
 $EGET $1
