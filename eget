@@ -40,6 +40,12 @@ fi
 # TODO:
 # -P support
 
+if [ -z "$1" ] ; then
+    echo "eget - wget wrapper" >&2
+    echo "Run with URL, like ftp://somesite.ru/dir/*.log" >&2
+    exit 1
+fi
+
 # If ftp protocol or have no asterisk, just download
 # TODO: use has()
 if echo "$1" | grep -q "^ftp://" || echo "$1" | grep -qv "[*?]" ; then
