@@ -3,8 +3,9 @@
 # Example use:
 # eget ftp://ftp.altlinux.ru/pub/security/ssl/*
 #
-# Copyright (C) 2014-2014  Etersoft
-# Copyright (C) 2014-2014  Daniil Mikhailov <danil@etersoft.ru>
+# Copyright (C) 2014-2014, 2016  Etersoft
+# Copyright (C) 2014 Daniil Mikhailov <danil@etersoft.ru>
+# Copyright (C) 2016-2017 Vitaly Lipatov <lav@etersoft.ru>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -20,37 +21,71 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
+WGET="wget"
 
-WGET="wget -q"
-
-if echo "$1" | grep -q "\(^ftp://\|[^*]$\)" ; then
-    $WGET $1 && exit 0
+if [ "$1" = "-q" ] ; then
+    WGET="wget -q"
+    shift
 fi
-URL=$(echo $1 | grep /$ || dirname $1)
-MASK=$(basename $1)
-MYTMPDIR="$(mktemp -d)"
-DIRALLFILES="$MYTMPDIR/files/"
 
-get_index(){
+# TODO:
+# download to this file
+WGET_OPTION_TARGET=
+if [ "$1" = "-O" ] ; then
+    TARGETFILE="$2"
+    WGET_OPTION_TARGET="-O $2"
+    shift 2
+fi
+
+# TODO:
+# -P support
+
+# If ftp protocol or have no asterisk, just download
+# TODO: use has()
+if echo "$1" | grep -q "^ftp://" || echo "$1" | grep -qv "[*?]" ; then
+    $WGET $WGET_OPTION_TARGET "$1"
+    exit
+fi
+
+echo "Fall to http workaround"
+
+URL=$(echo "$1" | grep "/$" || dirname "$1")
+# mask allowed only in last part of path
+MASK=$(basename "$1")
+
+get_index()
+{
+    MYTMPDIR="$(mktemp -d)"
     INDEX=$MYTMPDIR/index
     $WGET $URL -O $INDEX
 }
 
-save_temp_files(){
-    mkdir -p $DIRALLFILES
-    ALLFILES="$MYTMPDIR/allfiles"
-    cat $INDEX | grep -o -E 'href="([^\*/"#]+)"' | cut -d'"' -f2 > $ALLFILES 
-    while read line ; do
-	touch $DIRALLFILES/$line
-    done <$ALLFILES
+print_files()
+{
+    cat $INDEX | grep -o -E 'href="([^\*/"#]+)"' | cut -d'"' -f2
 }
 
-sort_files(){
-    for line in $DIRALLFILES/$MASK ; do
-	$WGET $URL/`basename "$line"` -P $CURRENTDIR/
+create_fake_files()
+{
+    DIRALLFILES="$MYTMPDIR/files/"
+    mkdir -p "$DIRALLFILES"
+
+    print_files | while read -r line ; do
+        touch $DIRALLFILES/$(basename "$line")
     done
+    rm -f $INDEX
 }
 
-get_index
-save_temp_files
-sort_files
+download_files()
+{
+    ERROR=0
+    for line in $DIRALLFILES/$MASK ; do
+        $WGET $URL/$(basename "$line") || ERROR=1
+    done
+    return $ERROR
+}
+
+get_index || { rm -rf "$MYTMPDIR" ; exit ; }
+create_fake_files
+download_files || echo "There was some download errors" >&2
+rm -rf "$MYTMPDIR"
