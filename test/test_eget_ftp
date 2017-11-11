@@ -1,29 +1,46 @@
 #!/bin/sh
 
 #EGET="bash -x /srv/danil/Projects/eget/eget"
-EGET="../../eget"
+EGET="$(pwd)/../eget"
 
 test_download(){
-echo "Download $1"
-
-MYDIR=./$(date +test-%H:%M:%S.%M)
-mkdir -p $MYDIR
-MYFILE=$MYDIR/$(basename $1)
-cd $MYDIR
-$EGET $1
-cd -
-file $MYFILE && echo OK || echo FAIL
-#rm -rf $MYDIR
-sleep 1
+    local URL="$1"
+    #echo "Download $URL"
+    echo
+    MYDIR=$(mktemp -d)
+    mkdir -p $MYDIR
+    cd $MYDIR
+    echo eget "$URL"
+    $EGET -q "$URL"
+    cd - >/dev/null
+    shift
+    for i in "$@" ; do
+        [ -s "$MYDIR/$i" ] || { echo "$URL: $i missed (check $MYDIR, please)" ; return 1 ; }
+        echo -e "\t$i OK"
+    done
+    # TODO: проверить на лишние файлы
+    echo "$URL: OK"
+    #sleep 1
+    rm -rf $MYDIR
 }
 
-test_download ftp://updates.etersoft.ru/pub/people/danil/Victor.jpg
-test_download ftp://ftp.altlinux.ru/pub/docs/Heap/favicon.ico
-test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/*
-test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/*
-test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/vm-profile.scm
-test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/ #Download index file like a wget #FAIL norm - file name index
-test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/ #FAIL norm - file name index
+LPATH=/var/ftp/pub/people/$USER/test_eget
+UPATH=$(echo $LPATH | sed -e "s|/var/ftp|//download.etersoft.ru|g")
+
+rm -rfv $LPATH
+mkdir $LPATH/ || exit
+echo "test" > $LPATH/test01.txt
+echo "test" > $LPATH/test02.txt
+echo "test" > $LPATH/test03.txt
+
+test_download ftp:$UPATH/test01.txt test01.txt
+test_download http:$UPATH/test01.txt test01.txt
+test_download ftp:$UPATH/* test01.txt test02.txt
+test_download http:$UPATH/* test01.txt test02.txt
+test_download http:$UPATH/ test01.txt test02.txt
+#test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/vm-profile.scm
+#test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/ #Download index file like a wget #FAIL norm - file name index
+#test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/ #FAIL norm - file name index
 
 #Not work test, failed on long name
 #test_download http://updates.etersoft.ru/pub/people/danil/eget_test/%d0%a1%d0%b0%d0%bd%d0%b4%d0%b5%d1%80%d1%81%20%d0%91.%2c%20%d0%9a%d1%83%d0%bc%d0%b0%d1%80%d0%b0%d0%bd%d0%b0%d1%82%d1%83%d0%bd%d0%b3%20%d0%a7.%20-%20ActionScript%203.0.%20%d0%a8%d0%b0%d0%b1%d0%bb%d0%be%d0%bd%d1%8b%20%d0%bf%d1%80%d0%be%d0%b5%d0%ba%d1%82%d0%b8%d1%80%d0%be%d0%b2%d0%b0%d0%bd%d0%b8%d1%8f%20-%202011.pdf
