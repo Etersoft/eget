@@ -35,6 +35,7 @@ test_glob "test?.tx"
 #test_glob "test.*"
 test_glob "test*.txt"
 test_glob "*1.txt"
+test_glob "test[1A].txt"
 
 
 rm -rf "$L"
