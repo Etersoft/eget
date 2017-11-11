@@ -1,0 +1,40 @@
+#!/bin/sh
+
+check()
+{
+	[ "$2" != "$3" ] && echo "FATAL with '$1': result '$3' do not match with '$2'" || echo "OK for '$1' with '$2'"
+}
+
+# check man glob
+filter_glob()
+{
+	grep "^$(echo "$1" | sed -e "s|\*|.*|g" -e "s|\?|.|g")$"
+}
+
+test_glob()
+{
+	local R1=$(ls -1 | filter_glob "$1")
+	local R2=$(ls $1)
+	check "$1" "$R1" "$R2"
+}
+
+L=$(mktemp -d)
+
+cd "$L" || exit
+touch testA.txt
+touch test0.txt
+touch test1.txt
+touch test2.txt
+touch est2.txt
+touch test2.tx
+
+ls -l
+test_glob "est?.txt"
+test_glob "test?.txt"
+test_glob "test?.tx"
+#test_glob "test.*"
+test_glob "test*.txt"
+test_glob "*1.txt"
+
+
+rm -rf "$L"

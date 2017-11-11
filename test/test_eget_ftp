@@ -3,6 +3,11 @@
 #EGET="bash -x /srv/danil/Projects/eget/eget"
 EGET="$(pwd)/../eget"
 
+check()
+{
+	[ "$2" != "$3" ] && echo "FATAL with '$1': result '$3' do not match with '$2'" || echo "OK for '$1' with '$2'"
+}
+
 test_download(){
     local URL="$1"
     #echo "Download $URL"
@@ -37,7 +42,18 @@ test_download ftp:$UPATH/test01.txt test01.txt
 test_download http:$UPATH/test01.txt test01.txt
 test_download ftp:$UPATH/* test01.txt test02.txt
 test_download http:$UPATH/* test01.txt test02.txt
-test_download http:$UPATH/ test01.txt test02.txt
+
+#echo "List: from http:$UPATH/*"
+#$EGET --list http:$UPATH/*
+
+L1=$($EGET --list http:$UPATH/*)
+L2="test01.txt
+test02.txt
+test03.txt"
+check "http:$UPATH/*" "$L1" "$L2"
+
+
+#test_download http:$UPATH/ test01.txt test02.txt
 #test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/vm-profile.scm
 #test_download http://updates.etersoft.ru/pub/people/danil/eget_test2/ #Download index file like a wget #FAIL norm - file name index
 #test_download ftp://updates.etersoft.ru/pub/people/danil/eget_test2/ #FAIL norm - file name index
