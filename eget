@@ -105,7 +105,7 @@ fi
 get_urls()
 {
     $WGET -O- $URL | \
-        grep -o -E 'href="([^\*/"#]+)"' | cut -d'"' -f2
+        grep -i -o -E 'href="([^\*/"#]+)"' | cut -d'"' -f2
 }
 
 if [ -n "$LISTONLY" ] ; then
