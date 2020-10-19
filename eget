@@ -44,7 +44,7 @@ fatal()
 filter_glob()
 {
 	# translate glob to regexp
-	grep "^$(echo "$1" | sed -e "s|\*|.*|g" -e "s|\?|.|g")$"
+	grep "^$(echo "$1" | sed -e "s|\*|.*|g" -e "s|?|.|g")$"
 }
 
 
