@@ -13,8 +13,8 @@ filter_glob()
 
 test_glob()
 {
-	local R1=$(ls -1 | filter_glob "$1")
-	local R2=$(ls $1)
+	local R1="$(ls -1 | filter_glob "$1")"
+	local R2="$(ls $1)"
 	check "$1" "$R1" "$R2"
 }
 
