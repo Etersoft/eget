@@ -156,7 +156,8 @@ get_github_urls()
         grep -i -o -E '"browser_download_url": "https://.*"' | cut -d'"' -f4
 }
 
-if echo "$1" | grep -q "^https://github.com/" ; then
+if echo "$1" | grep -q "^https://github.com/" && \
+   echo "$1" | grep -q -v "/download/" && [ -n "$2" ] ; then
     MASK="$2"
 
     if [ -n "$LISTONLY" ] ; then
