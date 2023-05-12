@@ -4,6 +4,12 @@ eget - wget like downloader wrapper with wildcard support in filename part of UR
 
 It supports download urls with wildcard. It supports wget or curl as backend.
 
+In common case you can install it via command
+```
+epm ei eget
+```
+Check https://github.com/Etersoft/eepm for universal instruction how to install epm on your distro.
+
 Basic usage:
 ```
 eget [options] http://somesite.ru/dir/file.log

@@ -1,3 +1,6 @@
 See also uscan:
 
 https://wiki.debian.org/debian/watch
+
+axel problems:
+redirect, content-disposition,get headers
