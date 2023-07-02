@@ -114,6 +114,8 @@ EGET_BACKEND= curl or wget
 
 See also:
 
+https://wiki.debian.org/debian/watch
+
 https://github.com/zyedidia/eget
 
 https://github.com/yuwancumian/eget
