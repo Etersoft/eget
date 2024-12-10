@@ -322,6 +322,8 @@ AXELNAMEOPTIONS=''
 WGETRUSTSERVERNAMES=''
 CURLTRUSTSERVERNAMES=''
 
+CURLOUTPUTDIR=''
+WGETOUTPUTDIR=''
 WGETNODIRECTORIES=''
 WGETCONTINUE=''
 CURLCONTINUE=''
@@ -330,7 +332,7 @@ CURLMAXTIME=''
 WGETREADTIMEOUT=''
 WGETRETRYCONNREFUSED=''
 CURLRETRYCONNREFUSED=''
-WGETTRIES=''
+WGETTRIES='--tries 1'
 CURLRETRY=''
 WGETLOADCOOKIES=''
 CURLCOOKIE=''
@@ -376,6 +378,8 @@ Options:
     -6|--ipv6|--inet6-only    - use only IPV6
     -O-|-O -                  - output downloaded file to stdout
     -O file                   - download to this file
+    -P|--output-dir           - download to this directory
+
     -nd|--no-directories      - do not create a hierarchy of directories when retrieving recursively
     -c|--continue             - continue getting a partially-downloaded file
     -T|--timeout=N            - set  the network timeout to N seconds
@@ -444,14 +448,19 @@ while [ -n "$1" ] ; do
             AXELNOSSLCHECK='--insecure'
             ;;
         -H|--header)
-            #TODO: error if header value contains spaces
+            # TODO: error if header value contains spaces
             if [ -z "$argvalue" ];then
                 shift
-                argvalue="$1"
+                argvalue="${1/ /}"
             fi
-            WGETHEADER="--header=\"$argvalue\""
-            CURLHEADER="--header \"$argvalue\""
-            AXELHEADER="--header=\"$argvalue\""
+            WGETHEADER="--header=$argvalue"
+            CURLHEADER="--header $argvalue"
+            AXELHEADER="--header=$argvalue"
+            ;;
+        -P|--output-dir)
+            shift
+            CURLOUTPUTDIR="--create-dirs --output-dir $1"
+            WGETOUTPUTDIR="-P $1"
             ;;
         -U|-A|--user-agent)
             user_agent="Mozilla/5.0 (X11; Linux $arch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
@@ -580,7 +589,7 @@ done
 # defaults
 
 # https://github.com/ipfs/kubo/issues/5541
-ipfs_diag_timeout='--timeout 60s'
+ipfs_diag_timeout='--timeout 20s'
 
 ipfs_api_local="/ip4/127.0.0.1/tcp/5001"
 [ -n "$EGET_IPFS_API" ] && ipfs_api_local="$EGET_IPFS_API"
@@ -588,7 +597,7 @@ ipfs_api_local="/ip4/127.0.0.1/tcp/5001"
 ipfs_api_brave="/ip4/127.0.0.1/tcp/45005"
 
 # Public IPFS http gateways
-ipfs_gateways="https://cloudflare-ipfs.com/ipfs https://dweb.link/ipfs https://dhash.ru/ipfs"
+ipfs_gateways="https://dhash.ru/ipfs https://ipfs.io/ipfs https://gateway.pinata.cloud/ipfs https://dweb.link/ipfs"
 
 # Test data: https://etersoft.ru/templates/etersoft/images/logo.png
 ipfs_checkQm="QmYwf2GAMvHxfFiUFL2Mr6KUG6QrDiupqGc8ms785ktaYw"
@@ -636,6 +645,15 @@ check_ipfs_gateway()
 
 select_ipfs_gateway()
 {
+
+    IPFS_GATEWAY=''
+
+    # if set some http gateway, use only it
+    if [ -n "$EGET_IPFS_GATEWAY" ] ; then
+        check_ipfs_gateway "$EGET_IPFS_GATEWAY" && IPFS_GATEWAY="$EGET_IPFS_GATEWAY" || ipfs_mode="disabled"
+        return
+    fi
+
     # check public http gateways
     for ipfs_gateway in $ipfs_gateways ; do
         check_ipfs_gateway $ipfs_gateway || continue
@@ -663,9 +681,10 @@ select_ipfs_mode()
         fi
     fi
 
+    # disabled, browser not for mass downloading
     IPFS_CMD="$(get_ipfs_brave)"
     # if no EGET_IPFS_API, check brave
-    if [ -z "$EGET_IPFS_API" ] && [ -n "$IPFS_CMD" ] ; then
+    if false && [ -z "$EGET_IPFS_API" ] && [ -n "$IPFS_CMD" ] ; then
         IPFS_API="$ipfs_api_brave"
         if ipfs_api_access ; then
             ipfs_mode="brave" && return
@@ -675,14 +694,6 @@ select_ipfs_mode()
             #    info "Skipped Brave: it is accessible via $IPFS_CMD --api $IPFS_API, but can't return shared $ipfs_checkQm"
             #fi
         fi
-    fi
-
-    IPFS_GATEWAY=''
-
-    # if set some http gateway, use only it
-    if [ -n "$EGET_IPFS_GATEWAY" ] ; then
-        check_ipfs_gateway "$EGET_IPFS_GATEWAY" && IPFS_GATEWAY="$EGET_IPFS_GATEWAY" || ipfs_mode="disabled"
-        return
     fi
 
     select_ipfs_gateway
@@ -695,7 +706,7 @@ get_cid_by_url()
     local URL="$1"
     [ -r "$EGET_IPFS_DB" ] || return
     is_fileurl "$URL" && return 1
-    grep -F "$URL Qm" "$EGET_IPFS_DB" | cut -f2 -d" " | grep -E "Qm[[:alnum:]]{44}" | head -n1
+    tac "$EGET_IPFS_DB" | grep -F "$URL Qm" | cut -f2 -d" " | grep -E "Qm[[:alnum:]]{44}" | head -n1
 }
 
 put_cid_and_url()
@@ -707,6 +718,11 @@ put_cid_and_url()
 
     is_fileurl "$URL" && return
 
+    local ac="$(get_url_by_cid)"
+    if [ "$ac" = "$URL" ] ; then
+        info "CID $CID is already exist as the same URL $URL in IPFS DB, skipping"
+        return
+    fi
     echo "$URL $CID $FN" >> "$EGET_IPFS_DB"
     info "Placed in $EGET_IPFS_DB: $URL $CID $FN"
 }
@@ -715,14 +731,14 @@ get_filename_by_cid()
 {
     local CID="$1"
     [ -z "$EGET_IPFS_DB" ] && basename "$CID" && return
-    grep -F " $CID " "$EGET_IPFS_DB" | head -n1 | cut -f3 -d" "
+    tac "$EGET_IPFS_DB" | grep -F " $CID " | head -n1 | cut -f3 -d" "
 }
 
 get_url_by_cid()
 {
     local CID="$1"
     [ -z "$EGET_IPFS_DB" ] && echo "$CID" && return
-    grep -F " $CID " "$EGET_IPFS_DB" | head -n1 | cut -f1 -d" "
+    tac "$EGET_IPFS_DB" | grep -F " $CID " | head -n1 | cut -f1 -d" "
 }
 
 ###################
@@ -755,7 +771,7 @@ if is_ipfsurl "$1" && [ -z "$ipfs_mode" ] || [ "$ipfs_mode" = "auto" ] ; then
     info "Autodetecting available IPFS relay..."
     select_ipfs_mode
     info "Auto selected IPFS mode: $ipfs_mode"
-    [ "$ipfs_mode" = "gateway" ] && info "Since the ipfs command is missed, the http gateway will be used."
+    [ "$ipfs_mode" = "gateway" ] && info "Since the local ipfs service is not accessible, the http gateway will be used."
 else
     [ "$ipfs_mode" = "gateway" ] && select_ipfs_gateway
     [ -n "$ipfs_mode" ] && info "IPFS mode: $ipfs_mode"
@@ -905,9 +921,9 @@ case "$EGET_BACKEND" in
         [ -n "$CURL" ] || fatal "There are no curl in the system but you forced using it via EGET_BACKEND. Install it with $ epm install curl"
         ;;
     '')
-        [ -n "$WGET" ] && EGET_BACKEND="wget"
-        [ -z "$EGET_BACKEND" ] && [ -n "$CURL" ] && EGET_BACKEND="curl"
-        [ -n "$EGET_BACKEND" ] || fatal "There are no wget nor curl in the system. Install something with $ epm install wget"
+        [ -n "$CURL" ] && EGET_BACKEND="curl"
+        [ -z "$EGET_BACKEND" ] && [ -n "$WGET" ] && EGET_BACKEND="wget"
+        [ -n "$EGET_BACKEND" ] || fatal "There are no wget nor curl in the system. Install it via $ epm install curl"
         ;;
     *)
         fatal "Uknown EGET_BACKEND $EGET_BACKEND"
@@ -1032,9 +1048,9 @@ elif [ "$EGET_BACKEND" = "wget" ] ; then
 __wget()
 {
     if [ -n "$WGETUSERAGENT" ] ; then
-        docmd $WGET $FORCEIPV $WGETQ $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$WGETUSERAGENT" "$@"
+        docmd $WGET $FORCEIPV $WGETQ $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$WGETUSERAGENT" "$@"
     else
-        docmd $WGET $FORCEIPV $WGETQ $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$@"
+        docmd $WGET $FORCEIPV $WGETQ $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$@"
     fi
 }
 
@@ -1066,7 +1082,7 @@ url_get_response()
 {
     local URL="$1"
     local answer
-    answer="$(quiet=1 __wget --spider -S "$URL" 2>&1)"
+    answer="$(quiet=1 __wget --timeout 20 --tries 1 --spider -S "$URL" 2>&1)"
     # HTTP/1.1 405 Method Not Allowed
     # HTTP/1.1 404 Not Found
     if echo "$answer" | grep -q "^ *HTTP/[12.]* 40[45]" ; then
@@ -1082,9 +1098,10 @@ elif [ "$EGET_BACKEND" = "curl" ] ; then
 __curl()
 {
     if [ -n "$CURLUSERAGENT" ] ; then
-        docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLCOMPRESSED $CURLHEADER $CURLNOSSLCHECK $CURLCONTINUE $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES "$CURLUSERAGENT" "$@"
+
+        docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLCOMPRESSED $CURLHEADER $CURLOUTPUTDIR $CURLNOSSLCHECK $CURLCONTINUE $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES "$CURLUSERAGENT" "$@"
     else
-        docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLCOMPRESSED $CURLHEADER $CURLNOSSLCHECK $CURLCONTINUE $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES "$@"
+        docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLCOMPRESSED $CURLHEADER $CURLOUTPUTDIR $CURLNOSSLCHECK $CURLCONTINUE $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES "$@"
     fi
 }
 # put remote content to stdout
@@ -1106,6 +1123,12 @@ url_sget()
        return
     fi
 
+    local FILENAME=$(url_get_filename "$URL")
+    if [ -n "$FILENAME" ] ; then
+        download_with_mirroring __curl "$URL" --remote-time --remote-header-name --output "$FILENAME"
+        return
+    fi
+    
     download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS
 }
 
@@ -1113,11 +1136,11 @@ url_get_response()
 {
     local URL="$1"
     local answer
-    answer="$(quiet=1 __curl -LI "$URL" 2>&1)"
+    answer="$(quiet=1 __curl --max-time 20 --retry 0 -LI "$URL" 2>&1)"
     # HTTP/1.1 405 Method Not Allowed
     # HTTP/1.1 404 Not Found
     if echo "$answer" | grep -q "^ *HTTP/[12.]* 40[45]" ; then
-        (quiet=1 __curl -L -i -r0-0 "$URL" 2>&1)
+        (quiet=1 __curl --max-time 20 --retry 0 -L -i -r0-0 "$URL" 2>&1)
         return
     fi
     echo "$answer"
@@ -1234,7 +1257,7 @@ scat()
     ###################
 
     local CID="$(get_cid_by_url "$URL")"
-    if [ -n "$CID" ] ; then
+    if [ -n "$CID" ] && [ -z "$EGET_IPFS_FORCE_LOAD" ] ; then
         info "$URL -> $CID"
         ipfs_cat "$CID"
         return
@@ -1281,7 +1304,7 @@ sget()
     #fi
 
     local CID="$(get_cid_by_url "$REALURL")"
-    if [ -n "$CID" ] ; then
+    if [ -n "$CID" ] && [ -z "$EGET_IPFS_FORCE_LOAD" ] ; then
 
         if [ -n "$GETIPFSCID" ] ; then
             echo "$CID"
@@ -1473,10 +1496,10 @@ get_urls()
         return
     fi
 
-    # Markdown support
-    # https://raw.githubusercontent.com/dotnet/core/main/release-notes/8.0/8.0.3/8.0.103.md
-    if echo "$URL" | grep -q "\.md$" ; then
-        scat $URL | grep "https*" | sed -e 's|.*\(https*://\)|\1|'
+    # Hack: Converted markdown support
+    # https://github.com/dotnet/core/blob/main/release-notes/9.0/preview/rc1/9.0.0-rc.1.md
+    if false && echo "$URL" | grep -q "\.md$" ; then
+        scat $URL | sed -e 's|<|<\n|g' | grep "https*" | sed -e 's|.*\(https*://\)|\1|' -e 's|".*||g'
         return
     fi
 
@@ -1516,7 +1539,7 @@ fi
 
 # separate part for github downloads
 if echo "$1" | grep -q "^https://github.com/" && \
-   echo "$1" | grep -q -v "/download/" && [ -n "$2" ] ; then
+   echo "$1" | grep -q -v "/blob/" && echo "$1" | grep -q -v "/download/" && [ -n "$2" ] ; then
     MASK="$2"
 
     if [ -n "$LISTONLY" ] ; then
@@ -1602,4 +1625,3 @@ for fn in $(get_urls | filter_glob "$MASK" | filter_order) ; do
     [ -n "$TARGETFILE" ] && [ "$ERROR" = "0" ] && break
 done
 exit $ERROR
-
