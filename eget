@@ -486,7 +486,7 @@ while [ -n "$1" ] ; do
             # TODO: error if header value contains spaces
             if [ -z "$argvalue" ];then
                 shift
-                argvalue="${1/ /}"
+                argvalue="$(printf '%s' "$1" | tr -d ' ')"
             fi
             WGETHEADER="--header=$argvalue"
             CURLHEADER="--header $argvalue"
