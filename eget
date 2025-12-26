@@ -1412,13 +1412,13 @@ url_get_headers()
 url_check_accessible()
 {
     local URL="$1"
-    url_get_response "$URL" | grep "HTTP/" | tail -n1 | grep -q -w "200\|404"
+    url_get_response "$URL" | grep "HTTP/[0-9]\.[0-9] [0-9]" | tail -n1 | grep -q -w "200\|404"
 }
 
 url_check_available()
 {
     local URL="$1"
-    url_get_response "$URL" | grep "HTTP/" | tail -n1 | grep -q -w "200"
+    url_get_response "$URL" | grep "HTTP/[0-9]\.[0-9] [0-9]" | tail -n1 | grep -q -w "200"
 }
 
 url_get_header()
