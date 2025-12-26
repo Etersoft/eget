@@ -1246,7 +1246,7 @@ url_sget()
        return
     fi
 
-    local FILENAME=$(url_get_filename "$URL")
+    local FILENAME="$(url_get_filename "$URL")"
     if [ -n "$FILENAME" ] ; then
         download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
         return
