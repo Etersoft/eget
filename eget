@@ -297,6 +297,7 @@ download_with_mirroring()
     MIRROR="https://mirror.eterfund.org"
     SECONDURL="$(echo "$URL" | sed -e "s|^.*://|$MIRROR/|")"
     $CMD "$@" "$SECONDURL" && URL="$SECONDURL" && return
+    return $res
 }
 
 
