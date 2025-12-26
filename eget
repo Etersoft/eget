@@ -321,7 +321,6 @@ WGETQ='' #-q
 CURLQ='' #-s
 AXELQ='' #-q
 ARIA2Q=''
-AXELQ=''
 # TODO: 
 WGETNAMEOPTIONS='--content-disposition'
 CURLFILENAMEOPTIONS='--remote-name --remote-time --remote-header-name'
@@ -368,9 +367,8 @@ set_quiet()
 {
     WGETQ='-q'
     CURLQ='-s'
-    AXELQ='-q'
-    ARIA2Q=''
     AXELQ='--quiet'
+    ARIA2Q=''
     quiet=1
 }
 
@@ -380,7 +378,6 @@ unset_quiet()
     CURLQ=''
     AXELQ=''
     ARIA2Q=''
-    AXELQ=''
     quiet=''
 }
 
