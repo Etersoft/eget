@@ -1505,7 +1505,9 @@ url_get_filename()
         loc=""
     fi
 
-    local loc="$URL"
+    # If real URL resolution failed, fallback to original URL
+    [ -n "$loc" ] || loc="$URL"
+
     if is_strange_url "$loc" ; then
         loc="$(echo "$loc" | sed -e "s|\?.*||")"
     fi
