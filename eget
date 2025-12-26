@@ -270,6 +270,11 @@ cid_from_url()
     echo "$1" | sed -e 's|^ipfs://*||' -e 's|\?.*||'
 }
 
+is_numeric()
+{
+    echo "$1" | grep -qE '^[0-9]+$'
+}
+
 
 # args: cmd <URL> <options>
 # will run cmd <options> <URL>
@@ -609,6 +614,9 @@ while [ -n "$1" ] ; do
                     ;;
 
                 *)
+                    if ! is_numeric "$argvalue" ; then
+                        fatal "Invalid value for --tries: '$argvalue' (must be a number, 0, or 'inf')"
+                    fi
                     WGETTRIES="--tries $argvalue"
                     CURLRETRY="--retry $(($argvalue-1))"
                     ;;
