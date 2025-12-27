@@ -1015,6 +1015,17 @@ case "$orig_EGET_BACKEND" in
 esac
 
 
+# Wrapper for wget command with all configured options
+# Defined globally so it can be used by aria2/axel backends for header operations
+__wget()
+{
+    if [ -n "$WGETUSERAGENT" ] ; then
+        docmd $WGET $FORCEIPV $WGETQ $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$(eval echo "$WGETUSERAGENT")" $EGET_WGET_OPTIONS "$@"
+    else
+        docmd $WGET $FORCEIPV $WGETQ $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
+    fi
+}
+
 
 if [ "$EGET_BACKEND" = "file" ] ; then
 
@@ -1153,14 +1164,6 @@ url_get_real_url()
 
 
 elif [ "$EGET_BACKEND" = "wget" ] ; then
-__wget()
-{
-    if [ -n "$WGETUSERAGENT" ] ; then
-        docmd $WGET $FORCEIPV $WGETQ $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES "$(eval echo "$WGETUSERAGENT")" $EGET_WGET_OPTIONS "$@"
-    else
-        docmd $WGET $FORCEIPV $WGETQ $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
-    fi
-}
 
 # put remote content to stdout
 url_scat()
@@ -1317,7 +1320,7 @@ url_pget()
 }
 
 
-# left wget here
+# use __wget for headers (aria2/axel don't support this natively)
 url_get_response()
 {
     local URL="$1"
@@ -1380,7 +1383,7 @@ url_pget()
 }
 
 
-# left wget here
+# use __wget for headers (aria2/axel don't support this natively)
 url_get_response()
 {
     local URL="$1"
