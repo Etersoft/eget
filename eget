@@ -510,12 +510,15 @@ while [ -n "$1" ] ; do
             AXELHEADER="--header=$argvalue"
             ;;
         -P|--output-dir)
-            shift
-            CURLOUTPUTDIR="--create-dirs --output-dir $1"
-            WGETOUTPUTDIR="-P $1"
-            ARIA2OUTPUTDIR="-d $1"
-            AXELOUTPUTDIR="-o $1"
-            USEOUTPUTDIR="$1"
+            if [ -z "$argvalue" ];then
+                shift
+                argvalue="$1"
+            fi
+            CURLOUTPUTDIR="--create-dirs --output-dir $argvalue"
+            WGETOUTPUTDIR="-P $argvalue"
+            ARIA2OUTPUTDIR="-d $argvalue"
+            AXELOUTPUTDIR="-o $argvalue"
+            USEOUTPUTDIR="$argvalue"
             ;;
         -U|-A|--user-agent)
             USERAGENT="Mozilla/5.0 (X11; Linux $arch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
@@ -646,9 +649,12 @@ while [ -n "$1" ] ; do
             esac
             ;;
         --load-cookies)
-            shift;
-            WGETLOADCOOKIES="--load-cookies $1"
-            CURLCOOKIE="--cookie $1"
+            if [ -z "$argvalue" ];then
+                shift
+                argvalue="$1"
+            fi
+            WGETLOADCOOKIES="--load-cookies $argvalue"
+            CURLCOOKIE="--cookie $argvalue"
             ;;
         -*)
             fatal "Unknown option '$1', check eget --help."
