@@ -369,6 +369,7 @@ AXELSHOWPROGRESS=''
 WGETTIMESTAMPING=''
 CURLTIMESTAMPING=''
 TIMESTAMPING=''
+INPUTFILE=''
 
 set_quiet()
 {
@@ -415,6 +416,7 @@ Options:
     --no-glob                 - turn off file name globbing
     -c|--continue             - continue getting a partially-downloaded file
     -N|--timestamping         - only download if remote file is newer than local
+    -i|--input-file FILE      - read URLs from FILE, one per line; each line can contain multiple mirror URLs (use - for stdin)
     -T|--timeout=N            - set  the network timeout to N seconds
     --read-timeout=N          - set the read (and write) timeout to N seconds
     --retry-connrefused       - consider “connection refused” a transient error and try again
@@ -584,6 +586,13 @@ while [ -n "$1" ] ; do
             TIMESTAMPING="1"
             WGETTIMESTAMPING="-N"
             CURLTIMESTAMPING="1"
+            ;;
+        -i|--input-file)
+            if [ -z "$argvalue" ];then
+                shift
+                argvalue="$1"
+            fi
+            INPUTFILE="$argvalue"
             ;;
         -T|--timeout)
             if [ -z "$argvalue" ];then
@@ -1851,6 +1860,34 @@ sget()
     url_sget "$@"
 }
 
+# Read URLs from file, skip empty lines and comments
+read_urls_from_file()
+{
+	local file="$1"
+	local line
+
+	if [ "$file" = "-" ] ; then
+		# Read from stdin
+		while IFS= read -r line ; do
+			line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+			[ -z "$line" ] && continue
+			echo "$line" | grep -q '^[[:space:]]*#' && continue
+			echo "$line"
+		done
+	else
+		# Read from file
+		[ ! -f "$file" ] && fatal "Error: input file '$file' not found"
+		[ ! -r "$file" ] && fatal "Error: input file '$file' is not readable"
+
+		while IFS= read -r line ; do
+			line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+			[ -z "$line" ] && continue
+			echo "$line" | grep -q '^[[:space:]]*#' && continue
+			echo "$line"
+		done < "$file"
+	fi
+}
+
 pget()
 {
     url_pget "$@"
@@ -2020,6 +2057,24 @@ else
         MASK=$(basename "$1")
     fi
 
+fi
+
+# Process input file if specified
+if [ -n "$INPUTFILE" ] ; then
+	# Set output dir to current dir if not specified
+	[ -z "$USEOUTPUTDIR" ] && USEOUTPUTDIR="."
+
+	# Read URLs from file
+	URLS="$(read_urls_from_file "$INPUTFILE")"
+	[ -z "$URLS" ] && fatal "Error: no valid URLs found in input file"
+
+	# Process each line separately (each line = one file, possibly with mirrors)
+	echo "$URLS" | while IFS= read -r line ; do
+		[ -z "$line" ] && continue
+		# Each line may contain multiple URLs (mirrors) separated by spaces
+		sget_with_mirrors $line
+	done
+	exit
 fi
 
 # https://www.freeoffice.com/download.php?filename=freeoffice-2021-1062.x86_64.rpm
