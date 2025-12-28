@@ -1246,6 +1246,18 @@ url_scat()
     download_with_mirroring __curl "$URL" --output -
 }
 
+# Helper to check Last-Modified for curl timestamping
+__curl_check_timestamp()
+{
+	local URL="$1"
+	[ -n "$quiet" ] && return 0  # Skip check in quiet mode
+
+	local last_modified="$(url_get_header "$URL" "Last-Modified")"
+	if [ -z "$last_modified" ] ; then
+		info "Warning: Server did not provide Last-Modified header, time-stamps turned off"
+	fi
+}
+
 # download to default name of to $2
 url_sget()
 {
@@ -1256,6 +1268,7 @@ url_sget()
        return
     elif [ -n "$2" ] ; then
        if [ -n "$CURLTIMESTAMPING" ] && [ -f "$2" ] ; then
+           __curl_check_timestamp "$URL"
            download_with_mirroring __curl "$URL" -z "$2" --output "$2"
        else
            download_with_mirroring __curl "$URL" --output "$2"
@@ -1266,6 +1279,7 @@ url_sget()
     local FILENAME="$(url_get_filename "$URL")"
     if [ -n "$FILENAME" ] ; then
         if [ -n "$CURLTIMESTAMPING" ] && [ -f "$FILENAME" ] ; then
+            __curl_check_timestamp "$URL"
             download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLNAMEOPTIONS --output "$FILENAME"
         else
             download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
@@ -1277,6 +1291,7 @@ url_sget()
         # Need to get filename first to use -z
         FILENAME="$(basename "$URL")"
         if [ -f "$FILENAME" ] ; then
+            __curl_check_timestamp "$URL"
             download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLFILENAMEOPTIONS
         else
             download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
