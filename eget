@@ -366,6 +366,10 @@ CURLSHOWPROGRESS=''
 ARIA2SHOWPROGRESS=''
 AXELSHOWPROGRESS=''
 
+WGETTIMESTAMPING=''
+CURLTIMESTAMPING=''
+TIMESTAMPING=''
+
 set_quiet()
 {
     WGETQ='-q'
@@ -410,6 +414,7 @@ Options:
     -nd|--no-directories      - do not create a hierarchy of directories when retrieving recursively
     --no-glob                 - turn off file name globbing
     -c|--continue             - continue getting a partially-downloaded file
+    -N|--timestamping         - only download if remote file is newer than local
     -T|--timeout=N            - set  the network timeout to N seconds
     --read-timeout=N          - set the read (and write) timeout to N seconds
     --retry-connrefused       - consider “connection refused” a transient error and try again
@@ -574,6 +579,11 @@ while [ -n "$1" ] ; do
             CURLCONTINUE="-C -"
             ARIA2CONTINUE="--continue=true"
             AXELCONTINUE=""
+            ;;
+        -N|--timestamping)
+            TIMESTAMPING="1"
+            WGETTIMESTAMPING="-N"
+            CURLTIMESTAMPING="1"
             ;;
         -T|--timeout)
             if [ -z "$argvalue" ];then
@@ -1026,7 +1036,7 @@ esac
 __wget()
 {
     [ -n "$USERAGENT" ] && set -- -U "$USERAGENT" "$@"
-    docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
+    docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETOUTPUTDIR $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMESTAMPING $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
 }
 
 
@@ -1245,17 +1255,35 @@ url_sget()
        scat "$1"
        return
     elif [ -n "$2" ] ; then
-       download_with_mirroring __curl "$URL" --output "$2"
+       if [ -n "$CURLTIMESTAMPING" ] && [ -f "$2" ] ; then
+           download_with_mirroring __curl "$URL" -z "$2" --output "$2"
+       else
+           download_with_mirroring __curl "$URL" --output "$2"
+       fi
        return
     fi
 
     local FILENAME="$(url_get_filename "$URL")"
     if [ -n "$FILENAME" ] ; then
-        download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
+        if [ -n "$CURLTIMESTAMPING" ] && [ -f "$FILENAME" ] ; then
+            download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLNAMEOPTIONS --output "$FILENAME"
+        else
+            download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
+        fi
         return
     fi
-    
-    download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
+
+    if [ -n "$CURLTIMESTAMPING" ] ; then
+        # Need to get filename first to use -z
+        FILENAME="$(basename "$URL")"
+        if [ -f "$FILENAME" ] ; then
+            download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLFILENAMEOPTIONS
+        else
+            download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
+        fi
+    else
+        download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
+    fi
 }
 
 url_pget()
@@ -1298,6 +1326,48 @@ url_scat()
     download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o - "$URL"
 }
 
+# Helper function for timestamping with aria2/axel
+__timestamping_download()
+{
+    local URL="$1"
+    local TARGETFILE="$2"
+    local DOWNLOAD_CMD="$3"  # will be "__aria2 ..." or "__axel ..."
+
+    # If file doesn't exist, just download
+    [ ! -f "$TARGETFILE" ] && eval "$DOWNLOAD_CMD" && return
+
+    # Get Last-Modified header
+    local remote_modified="$(url_get_header "$URL" "Last-Modified")"
+
+    if [ -z "$remote_modified" ] ; then
+        info "Warning: Server did not provide Last-Modified header, downloading anyway"
+        eval "$DOWNLOAD_CMD"
+        return
+    fi
+
+    # Convert HTTP date to unix timestamp
+    local remote_timestamp="$(date -d "$remote_modified" '+%s' 2>/dev/null)"
+    if [ -z "$remote_timestamp" ] ; then
+        info "Warning: Could not parse Last-Modified date '$remote_modified', downloading anyway"
+        eval "$DOWNLOAD_CMD"
+        return
+    fi
+
+    # Get local file timestamp
+    local local_timestamp="$(stat -c '%Y' "$TARGETFILE" 2>/dev/null)"
+    [ -z "$local_timestamp" ] && local_timestamp=0
+
+    # Compare timestamps
+    if [ "$remote_timestamp" -gt "$local_timestamp" ] ; then
+        info "Remote file is newer, downloading..."
+        eval "$DOWNLOAD_CMD" || return 1
+        # Set timestamp from server
+        touch -d "$remote_modified" "$TARGETFILE" 2>/dev/null
+    else
+        info "Local file is up to date, skipping download"
+    fi
+}
+
 # download to default name of to $2
 url_sget()
 {
@@ -1306,11 +1376,24 @@ url_sget()
        scat "$URL"
        return
     elif [ -n "$2" ] ; then
-       download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o "$2" "$URL"
+       if [ -n "$TIMESTAMPING" ] ; then
+           __timestamping_download "$URL" "$2" "download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o \"$2\" \"$URL\""
+       else
+           download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o "$2" "$URL"
+       fi
        return
     fi
-# TODO: overwrite always
-    download_with_mirroring __aria2 "$URL"
+
+    # No explicit output file
+    if [ -n "$TIMESTAMPING" ] ; then
+        # Get filename first for timestamping
+        local FILENAME="$(url_get_filename "$URL")"
+        [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
+        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __aria2 --allow-overwrite=true \"$URL\""
+    else
+        # TODO: overwrite always
+        download_with_mirroring __aria2 "$URL"
+    fi
 }
 
 url_pget()
@@ -1366,10 +1449,23 @@ url_sget()
        scat "$URL"
        return
     elif [ -n "$2" ] ; then
-       download_with_mirroring __axel --alternate -o "$2" "$URL"
+       if [ -n "$TIMESTAMPING" ] ; then
+           __timestamping_download "$URL" "$2" "download_with_mirroring __axel --alternate -o \"$2\" \"$URL\""
+       else
+           download_with_mirroring __axel --alternate -o "$2" "$URL"
+       fi
        return
     fi
-    download_with_mirroring __axel --alternate "$URL"
+
+    # No explicit output file
+    if [ -n "$TIMESTAMPING" ] ; then
+        # Get filename first for timestamping
+        local FILENAME="$(url_get_filename "$URL")"
+        [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
+        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __axel --alternate \"$URL\""
+    else
+        download_with_mirroring __axel --alternate "$URL"
+    fi
 }
 
 url_pget()
@@ -1890,6 +1986,9 @@ fi
 
 # if more than one file or if --output-dir is used
 if [ -n "$USEOUTPUTDIR" ] ; then
+    if [ -n "$TIMESTAMPING" ] ; then
+        fatal "Error: --timestamping is not supported with --output-dir (parallel downloads)"
+    fi
     CURLOUTPUTDIR="--create-dirs --output-dir $USEOUTPUTDIR"
     pget "$@"
     exit
