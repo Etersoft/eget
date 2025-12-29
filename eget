@@ -1437,6 +1437,13 @@ url_pget()
     echo "$@" | xargs -n1 | download_with_mirroring __aria2 -i-
 }
 
+# Download file from multiple mirrors simultaneously (TAB-separated for aria2)
+sget_with_mirrors()
+{
+    # aria2 supports multiple URLs for same file separated by TAB
+    local tab_urls="$(echo "$@" | tr ' ' '\t')"
+    echo "$tab_urls" | __aria2 -i-
+}
 
 # use __wget for headers (aria2/axel don't support this natively)
 url_get_response()
