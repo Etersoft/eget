@@ -1332,10 +1332,13 @@ url_sget()
 url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
+    # curl needs -O before each URL for parallel downloads
+    local args=""
     local URL
     for URL in "$@" ; do
-        download_with_mirroring __curl $CURLFILENAMEOPTIONS "$URL"
+        args="$args $CURLFILENAMEOPTIONS $URL"
     done
+    __curl --parallel $args
 }
 
 # Download file with mirror fallback (try each URL until success)
