@@ -1320,6 +1320,16 @@ url_pget()
     done
 }
 
+# Download file with mirror fallback (try each URL until success)
+sget_with_mirrors()
+{
+    local URL
+    for URL in "$@" ; do
+        __curl $CURLFILENAMEOPTIONS "$URL" && return 0
+    done
+    return 1
+}
+
 url_get_response()
 {
     local URL="$1"
