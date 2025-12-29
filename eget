@@ -1213,6 +1213,16 @@ url_pget()
     download_with_mirroring __wget $WGETNAMEOPTIONS "$@"
 }
 
+# Download file with mirror fallback (try each URL until success)
+sget_with_mirrors()
+{
+    local URL
+    for URL in "$@" ; do
+        __wget $WGETNAMEOPTIONS "$URL" && return 0
+    done
+    return 1
+}
+
 url_get_response()
 {
     local URL="$1"
