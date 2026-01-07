@@ -1496,14 +1496,13 @@ __axel()
 # put remote content to stdout
 url_scat()
 {
-    # TODO
-    fatal "Improve me (via temp. file?)"
+    # axel doesn't support stdout output, fallback to wget
     local URL="$1"
-    download_with_mirroring __axel -o - "$URL" && return
+    download_with_mirroring __wget "$URL" -O- && return
     local RES=$?
     [ -n "$quiet" ] || return $RES
     unset_quiet
-    download_with_mirroring __axel -o - "$URL"
+    download_with_mirroring __wget "$URL" -O-
 }
 
 # download to default name of to $2
