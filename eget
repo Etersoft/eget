@@ -1510,7 +1510,10 @@ url_get_filename()
         loc="$(echo "$loc" | sed -e "s|\?.*||")"
     fi
 
-    [ -n "$loc" ] && basename "$loc"
+    [ -n "$loc" ] || return
+    filename="$(basename "$loc")"
+    [ "$filename" = "redirect" ] && return 1
+    echo "$filename"
 }
 
 fi
