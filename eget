@@ -1536,18 +1536,24 @@ url_sget()
 url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
-    # download_with_mirroring __axel "$@"
+    # axel doesn't support output directory, use cd workaround
     local URL
+    local oldpwd="$PWD"
+    cd "$USEOUTPUTDIR" || return 1
     for URL in "$@" ; do
         download_with_mirroring __axel --alternate "$URL"
     done
+    cd "$oldpwd"
 }
 
 # Download file from multiple mirrors simultaneously (axel supports multiple URLs)
 sget_with_mirrors()
 {
-    # axel downloads from all URLs simultaneously as mirrors
+    # axel doesn't support output directory, use cd workaround
+    local oldpwd="$PWD"
+    [ -n "$USEOUTPUTDIR" ] && { cd "$USEOUTPUTDIR" || return 1; }
     __axel --alternate "$@"
+    [ -n "$USEOUTPUTDIR" ] && cd "$oldpwd"
 }
 
 # use __wget for headers (aria2/axel don't support this natively)
