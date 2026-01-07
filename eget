@@ -1883,6 +1883,10 @@ fi
 if is_url "$MASK" ; then
     #[ -z "$USEOUTPUTDIR" ] && fatal "eget supports only one URL as argument by default, use --output-dir to download in parallel"
     USEOUTPUTDIR="."
+fi
+
+# if more than one file or if --output-dir is used
+if [ -n "$USEOUTPUTDIR" ] ; then
     CURLOUTPUTDIR="--create-dirs --output-dir $USEOUTPUTDIR"
     pget "$@"
     exit
