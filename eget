@@ -1767,7 +1767,7 @@ make_fileurl()
     local url="$1"
     local fn="$2"
 
-    fn="$(echo "$fn" | sed -e 's|^./||' -e 's|^/+||')"
+    fn="$(echo "$fn" | sed -e 's|^./||' -e 's|^/*||')"
 
     if is_fileurl "$url" ; then
         # if it is url
