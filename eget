@@ -1375,12 +1375,13 @@ __aria2()
 # put remote content to stdout
 url_scat()
 {
+    # aria2 -o - creates file named "-", not stdout output, fallback to wget
     local URL="$1"
-    download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o - "$URL" && return
+    download_with_mirroring __wget "$URL" -O- && return
     local RES=$?
     [ -n "$quiet" ] || return $RES
     unset_quiet
-    download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o - "$URL"
+    download_with_mirroring __wget "$URL" -O-
 }
 
 # Helper function for timestamping with aria2/axel
