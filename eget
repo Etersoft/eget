@@ -1105,7 +1105,7 @@ url_pget()
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
     local URL
     for URL in "$@" ; do
-        cp -av "$(path_from_url "$URL")" $USEOUTPUTDIR
+        cp -av "$(path_from_url "$URL")" "$USEOUTPUTDIR"
     done
 }
 
@@ -1168,7 +1168,7 @@ url_pget()
     for URL in "$@" ; do
         local fn="$(url_print_filename_from_url "$URL")"
         if [ -z "$fn" ] ; then
-           fn="$(basename $URL)"
+           fn="$(basename "$URL")"
         fi
         ipfs_get "$(cid_from_url "$URL")" "$USEOUTPUTDIR/$fn"
     done
