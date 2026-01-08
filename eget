@@ -574,7 +574,7 @@ while [ -n "$1" ] ; do
         --second-latest)
             SECONDLATEST="$1"
             ;;
-        --check-mirrors)
+        --allow-mirrors|--check-mirrors)
             CHECKMIRRORS="$1"
             ;;
         -O)
