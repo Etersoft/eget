@@ -1461,7 +1461,7 @@ url_sget()
        if [ -n "$TIMESTAMPING" ] ; then
            __timestamping_download "$URL" "$2" "download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o \"$2\" \"$URL\""
        else
-           download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false -o "$2" "$URL"
+           download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o "$2" "$URL"
        fi
        return
     fi
@@ -1473,15 +1473,14 @@ url_sget()
         [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
         __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __aria2 --allow-overwrite=true \"$URL\""
     else
-        # TODO: overwrite always
-        download_with_mirroring __aria2 "$URL"
+        download_with_mirroring __aria2 --allow-overwrite=true "$URL"
     fi
 }
 
 url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
-    echo "$@" | xargs -n1 | download_with_mirroring __aria2 -i-
+    echo "$@" | xargs -n1 | download_with_mirroring __aria2 --allow-overwrite=true -i-
 }
 
 # Download file from multiple mirrors simultaneously (TAB-separated for aria2)
@@ -1518,6 +1517,13 @@ __axel()
     docmd $AXEL $FORCEIPV $AXELQ_LOCAL $AXELCONTINUE $AXELTIMEOUT $AXELHEADER $AXELNOSSLCHECK $EGET_AXEL_OPTIONS "$@"
 }
 
+# Remove target file and state file before download (axel can't overwrite)
+__axel_clean()
+{
+    local target="$1"
+    rm -f "$target" "$target.st" 2>/dev/null
+}
+
 # put remote content to stdout
 url_scat()
 {
@@ -1541,18 +1547,21 @@ url_sget()
        if [ -n "$TIMESTAMPING" ] ; then
            __timestamping_download "$URL" "$2" "download_with_mirroring __axel --alternate -o \"$2\" \"$URL\""
        else
+           # axel can't overwrite, clean first
+           __axel_clean "$2"
            download_with_mirroring __axel --alternate -o "$2" "$URL"
        fi
        return
     fi
 
-    # No explicit output file
+    # No explicit output file - get filename from URL
+    local FILENAME="$(url_get_filename "$URL")"
+    [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
     if [ -n "$TIMESTAMPING" ] ; then
-        # Get filename first for timestamping
-        local FILENAME="$(url_get_filename "$URL")"
-        [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
         __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __axel --alternate \"$URL\""
     else
+        # axel can't overwrite, clean first
+        __axel_clean "$FILENAME"
         download_with_mirroring __axel --alternate "$URL"
     fi
 }
@@ -1561,10 +1570,13 @@ url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
     # axel doesn't support output directory, use cd workaround
-    local URL
+    local URL FILENAME
     local oldpwd="$PWD"
     cd "$USEOUTPUTDIR" || return 1
     for URL in "$@" ; do
+        # axel can't overwrite, clean first
+        FILENAME="$(basename "$URL")"
+        __axel_clean "$FILENAME"
         download_with_mirroring __axel --alternate "$URL"
     done
     cd "$oldpwd"
@@ -1576,6 +1588,8 @@ sget_with_mirrors()
     # axel doesn't support output directory, use cd workaround
     local oldpwd="$PWD"
     [ -n "$USEOUTPUTDIR" ] && { cd "$USEOUTPUTDIR" || return 1; }
+    # axel can't overwrite, clean first (all URLs point to same file)
+    __axel_clean "$(basename "$1")"
     __axel --alternate "$@"
     [ -n "$USEOUTPUTDIR" ] && cd "$oldpwd"
 }
