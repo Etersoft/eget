@@ -295,6 +295,8 @@ is_numeric()
 
 # args: cmd <URL> <options>
 # will run cmd <options> <URL>
+# If CHECKMIRRORS is set and EGET_MIRRORS contains mirror hosts,
+# will try each mirror on failure
 download_with_mirroring()
 {
     local CMD="$1"
@@ -307,13 +309,14 @@ download_with_mirroring()
     res=$?
     [ -n "$CHECKMIRRORS" ] || return $res
 
-    MIRROR="https://mirror.eterfund.ru"
-    SECONDURL="$(echo "$URL" | sed -e "s|^.*://|$MIRROR/|")"
-    $CMD "$@" "$SECONDURL" && URL="$SECONDURL" && return
-
-    MIRROR="https://mirror.eterfund.org"
-    SECONDURL="$(echo "$URL" | sed -e "s|^.*://|$MIRROR/|")"
-    $CMD "$@" "$SECONDURL" && URL="$SECONDURL" && return
+    # Default mirrors if EGET_MIRRORS is not set
+    local mirrors="${EGET_MIRRORS:-https://mirror.eterfund.ru https://mirror.eterfund.org}"
+    local MIRROR SECONDURL
+    for MIRROR in $mirrors ; do
+        # Replace protocol:// with mirror/, preserving original host as path component
+        SECONDURL="$(echo "$URL" | sed -e "s|^[a-z]*://|$MIRROR/|")"
+        $CMD "$@" "$SECONDURL" && return
+    done
     return $res
 }
 
@@ -437,7 +440,7 @@ Options:
     --load-cookies file       - load cookies from file before the first HTTP retrieval
     --latest                  - print only latest version of a file
     --second-latest           - print only second to latest version of a file
-    --allow-mirrors           - check mirrors if url is not accessible
+    --allow-mirrors           - try mirrors from EGET_MIRRORS if url is not accessible
     --trust-server-names      - use the name specified by the redirection
 
     --list|--list-only        - print only URLs
@@ -455,6 +458,7 @@ Supported backends (set like EGET_BACKEND=curl)
   wget, curl and partially aria2c, axel, rsync
 
 Also you can set EGET_OPTIONS variable with needed options
+Set EGET_MIRRORS to override default mirrors for --allow-mirrors (default: eterfund mirrors)
 
 Examples:
   $ eget http://ftp.somesite.ru/package-*.x64.tar
