@@ -353,6 +353,8 @@ WGETNODIRECTORIES=''
 WGETCONTINUE=''
 CURLCONTINUE=''
 ARIA2CONTINUE=''
+CONTINUE=''
+FORCEOVERWRITE=''
 WGETTIMEOUT=''
 CURLMAXTIME=''
 WGETREADTIMEOUT=''
@@ -431,6 +433,7 @@ Options:
     -nd|--no-directories      - do not create a hierarchy of directories when retrieving recursively
     --no-glob                 - turn off file name globbing
     -c|--continue             - continue getting a partially-downloaded file
+    --force|--allow-overwrite - force overwrite existing file
     -N|--timestamping         - only download if remote file is newer than local
     -i|--input-file FILE      - read URLs from FILE, one per line; each line can contain multiple mirror URLs (use - for stdin)
     -T|--timeout=N            - set  the network timeout to N seconds
@@ -595,10 +598,14 @@ while [ -n "$1" ] ; do
             NOGLOB="--no-glob"
             ;;
         -c|--continue)
+            CONTINUE=1
             WGETCONTINUE="$1"
             CURLCONTINUE="-C -"
             ARIA2CONTINUE="--continue=true"
             AXELCONTINUE=""
+            ;;
+        --force|--allow-overwrite)
+            FORCEOVERWRITE=1
             ;;
         -N|--timestamping)
             TIMESTAMPING="1"
@@ -1862,6 +1869,21 @@ sget()
        return
     fi
 
+    # Check if target file exists (unless --force, -c, or -N is used)
+    if [ -n "$TARGET" ] && [ -f "$TARGET" ] ; then
+        if [ -n "$TIMESTAMPING" ] ; then
+            # -N: handled by backend timestamping logic
+            :
+        elif [ -n "$CONTINUE" ] ; then
+            # -c: pass to backend for resume
+            :
+        elif [ -n "$FORCEOVERWRITE" ] ; then
+            # --force: will overwrite
+            :
+        else
+            fatal "File '$TARGET' already exists. Use --force to overwrite, -c to continue, or -N for timestamping."
+        fi
+    fi
 
     #if is_strange_url "$REALURL" ; then
     #    info "Just download strange URL $REALURL, skipping IPFS"
@@ -1893,6 +1915,12 @@ sget()
             if [ -z "$TARGET" ] ; then
                 TARGET="$CID"
             fi
+            # Check if target file exists (TARGET was just determined from CID)
+            if [ -f "$TARGET" ] ; then
+                if [ -z "$TIMESTAMPING" ] && [ -z "$CONTINUE" ] && [ -z "$FORCEOVERWRITE" ] ; then
+                    fatal "File '$TARGET' already exists. Use --force to overwrite, -c to continue, or -N for timestamping."
+                fi
+            fi
         fi
         [ "$URL" = "$REALURL" ] && info "$URL -> $CID -> $TARGET" || info "$URL -> $REALURL -> $CID -> $TARGET"
         ipfs_get "$CID" "$TARGET" && return
@@ -1907,6 +1935,12 @@ sget()
     local FN="$(url_get_filename "$REALURL")" || return
     if [ -z "$TARGET" ] ; then
         TARGET="$FN"
+        # Check if target file exists (TARGET was just determined from URL)
+        if [ -f "$TARGET" ] ; then
+            if [ -z "$TIMESTAMPING" ] && [ -z "$CONTINUE" ] && [ -z "$FORCEOVERWRITE" ] ; then
+                fatal "File '$TARGET' already exists. Use --force to overwrite, -c to continue, or -N for timestamping."
+            fi
+        fi
     fi
 
     if [ -n "$GETIPFSCID" ] ; then
@@ -1968,14 +2002,40 @@ scat()
 
 sget()
 {
+    local URL="$1"
+    local TARGET="$2"
+
     if [ -n "$GETFILENAME" ] ; then
-        get_filename "$1"
+        get_filename "$URL"
         exit
     fi
 
     if [ -n "$GETREALURL" ] ; then
-        get_real_url "$1"
+        get_real_url "$URL"
         exit
+    fi
+
+    # Skip check for stdout
+    if [ "$TARGET" = "/dev/stdout" ] || [ "$TARGET" = "-" ] ; then
+        url_sget "$@"
+        return
+    fi
+
+    # Check if target file exists (unless --force, -c, or -N is used)
+    # When TARGET is not specified, determine it from URL
+    local TARGET_FROM_URL=""
+    if [ -z "$TARGET" ] ; then
+        TARGET_FROM_URL="$(url_get_filename "$URL")"
+        TARGET="$TARGET_FROM_URL"
+    fi
+    if [ -n "$TARGET" ] && [ -f "$TARGET" ] ; then
+        if [ -z "$TIMESTAMPING" ] && [ -z "$CONTINUE" ] && [ -z "$FORCEOVERWRITE" ] ; then
+            fatal "File '$TARGET' already exists. Use --force to overwrite, -c to continue, or -N for timestamping."
+        fi
+        # With --force and no explicit -O, delete file so wget won't create .1
+        if [ -n "$FORCEOVERWRITE" ] && [ -n "$TARGET_FROM_URL" ] ; then
+            rm -f "$TARGET"
+        fi
     fi
 
     url_sget "$@"
