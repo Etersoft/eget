@@ -270,6 +270,18 @@ is_ftpurl()
     echo "$1" | grep -q "^ftp://"
 }
 
+is_rsyncurl()
+{
+    echo "$1" | grep -q "^rsync://"
+}
+
+# SSH/rsync URL: user@host:/path or host:/path (but not scheme://)
+is_sshurl()
+{
+    # Match host:path or host:/path, but not scheme://
+    echo "$1" | grep -qE '^[^/:]+:' && ! echo "$1" | grep -q "://"
+}
+
 cid_from_url()
 {
     echo "$1" | sed -e 's|^ipfs://*||' -e 's|\?.*||'
@@ -437,10 +449,10 @@ Options:
     --get-ipfs-cid URL        - print CID for URL (after all redirects)
 
 Supported URLs:
-  ftp:// http:// https:// file:/ ipfs://
+  ftp:// http:// https:// file:/ ipfs:// rsync:// [user@]host:/path
 
 Supported backends (set like EGET_BACKEND=curl)
-  wget, curl and partially aria2c, axel
+  wget, curl and partially aria2c, axel, rsync
 
 Also you can set EGET_OPTIONS variable with needed options
 
@@ -997,6 +1009,7 @@ WGET="$(print_command_path wget)"
 CURL="$(print_command_path curl)"
 ARIA2="$(print_command_path aria2)"
 AXEL="$(print_command_path axel)"
+RSYNC="$(print_command_path rsync)"
 
 ORIG_EGET_BACKEND="$EGET_BACKEND"
 
@@ -1005,13 +1018,15 @@ if is_fileurl "$1" ; then
     EGET_BACKEND="file"
 elif is_ipfsurl "$1" ; then
     EGET_BACKEND="ipfs"
+elif is_rsyncurl "$1" || is_sshurl "$1" ; then
+    EGET_BACKEND="rsync"
 fi
 
 orig_EGET_BACKEND="$EGET_BACKEND"
 EGET_BACKEND="$(basename "$EGET_BACKEND")"
 
 case "$orig_EGET_BACKEND" in
-    file|ipfs)
+    file|ipfs|rsync)
         ;;
     */wget)
         WGET="$orig_EGET_BACKEND"
@@ -1576,6 +1591,70 @@ url_get_response()
     echo "$answer"
 }
 
+elif [ "$EGET_BACKEND" = "rsync" ] ; then
+
+__rsync()
+{
+    local opts=""
+    [ -n "$quiet" ] && opts="$opts -q"
+    [ -n "$verbose" ] && opts="$opts -v"
+    [ -n "$TIMESTAMPING" ] && opts="$opts -u"
+    docmd $RSYNC $opts $EGET_RSYNC_OPTIONS "$@"
+}
+
+# put remote content to stdout
+url_scat()
+{
+    local URL="$1"
+    # rsync can't output to stdout, use temp file
+    local tmpfile="$(mktemp)"
+    __rsync "$URL" "$tmpfile" && cat "$tmpfile"
+    local res=$?
+    rm -f "$tmpfile"
+    return $res
+}
+
+# download to default name or to $2
+url_sget()
+{
+    local URL="$1"
+    if [ "$2" = "/dev/stdout" ] || [ "$2" = "-" ] ; then
+        scat "$URL"
+        return
+    elif [ -n "$2" ] ; then
+        __rsync "$URL" "$2"
+        return
+    fi
+    # Download to current directory with original name
+    __rsync "$URL" .
+}
+
+url_pget()
+{
+    local URL
+    local destdir="${USEOUTPUTDIR:-.}"
+    for URL in "$@" ; do
+        __rsync "$URL" "$destdir/"
+    done
+}
+
+# rsync doesn't support HTTP headers
+url_get_response()
+{
+    warning "rsync:// does not support HTTP headers"
+    return 1
+}
+
+url_get_filename()
+{
+    basename "$1"
+}
+
+url_get_real_url()
+{
+    echo "$1"
+}
+
 else
     fatal "Unknown EGET_BACKEND '$EGET_BACKEND', logical error."
 fi
@@ -1981,6 +2060,9 @@ make_fileurl()
     if is_fileurl "$url" ; then
         # if it is url
         :
+    elif is_rsyncurl "$url" || is_sshurl "$url" ; then
+        # rsync/ssh URLs: just ensure trailing slash
+        url="$(echo "$url" | sed 's|/*$|/|')"
     elif is_abs_path "$fn" ; then
         # if there is file path from the root of the site
         url="$(get_host_only "$url")"
@@ -1996,6 +2078,12 @@ get_urls()
 {
     if is_fileurl "$URL" ; then
         ls -1 "$(path_from_url "$URL")"
+        return
+    fi
+
+    # rsync directory listing
+    if is_rsyncurl "$URL" || is_sshurl "$URL" ; then
+        $RSYNC --list-only "$URL" 2>/dev/null | awk '{print $NF}'
         return
     fi
 
@@ -2076,7 +2164,7 @@ if [ -n "$2" ] ; then
     MASK="$2"
     SEPMASK="$2"
 else
-    if [ -n "$NOGLOB" ] || have_end_slash_or_php_parametr "$1" ; then
+    if [ -n "$NOGLOB" ] || have_end_slash_or_php_parametr "$1" || is_rsyncurl "$1" || is_sshurl "$1" ; then
         URL="$1"
         MASK=""
     else
