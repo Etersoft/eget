@@ -740,10 +740,10 @@ check_ipfs_gateway()
         return
     fi
 
-    if docmd eget --check-site "$(dirname $ipfs_gateway)" ; then
+    if docmd eget --check-site "$(dirname "$ipfs_gateway")" ; then
        info "IPFS gateway $ipfs_gateway is accessible, but can't return shared $ipfs_checkQm"
     else
-       info "IPFS gateway $(dirname $ipfs_gateway) is not accessible"
+       info "IPFS gateway $(dirname "$ipfs_gateway") is not accessible"
     fi
 
     return 1
@@ -905,7 +905,7 @@ ipfs_cat()
 
 elif [ "$ipfs_mode" = "brave" ] ; then
     IPFS_CMD="$(get_ipfs_brave)" || fatal "Can't find ipfs command in Brave"
-    IPFS_PRETTY_CMD="~Brave-Browser/$(basename $IPFS_CMD)"
+    IPFS_PRETTY_CMD="~Brave-Browser/$(basename "$IPFS_CMD")"
     IPFS_API="$ipfs_api_brave"
     ipfs_api_access || fatal "Can't access to Brave IPFS API (Brave browser is not running and IPFS is not activated?)"
     info "Will use $IPFS_PRETTY_CMD --api $IPFS_API"
