@@ -1080,6 +1080,47 @@ __wget()
     docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMESTAMPING $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
 }
 
+# Helper function for timestamping with aria2/axel (needs to be outside backend blocks)
+__timestamping_download()
+{
+    local URL="$1"
+    local TARGETFILE="$2"
+    local DOWNLOAD_CMD="$3"  # will be "__aria2 ..." or "__axel ..."
+
+    # If file doesn't exist, just download
+    [ ! -f "$TARGETFILE" ] && eval "$DOWNLOAD_CMD" && return
+
+    # Get Last-Modified header
+    local remote_modified="$(url_get_header "$URL" "Last-Modified")"
+
+    if [ -z "$remote_modified" ] ; then
+        info "Warning: Server did not provide Last-Modified header, downloading anyway"
+        eval "$DOWNLOAD_CMD"
+        return
+    fi
+
+    # Convert HTTP date to unix timestamp
+    local remote_timestamp="$(date -d "$remote_modified" '+%s' 2>/dev/null)"
+    if [ -z "$remote_timestamp" ] ; then
+        info "Warning: Could not parse Last-Modified date '$remote_modified', downloading anyway"
+        eval "$DOWNLOAD_CMD"
+        return
+    fi
+
+    # Get local file timestamp
+    local local_timestamp="$(stat -c '%Y' "$TARGETFILE" 2>/dev/null)"
+    [ -z "$local_timestamp" ] && local_timestamp=0
+
+    # Compare timestamps
+    if [ "$remote_timestamp" -gt "$local_timestamp" ] ; then
+        info "Remote file is newer, downloading..."
+        eval "$DOWNLOAD_CMD" || return 1
+        # Set timestamp from server
+        touch -d "$remote_modified" "$TARGETFILE" 2>/dev/null
+    else
+        info "Local file is up to date, skipping download"
+    fi
+}
 
 if [ "$EGET_BACKEND" = "file" ] ; then
 
@@ -1406,48 +1447,6 @@ url_scat()
     [ -n "$quiet" ] || return $RES
     unset_quiet
     download_with_mirroring __wget "$URL" -O-
-}
-
-# Helper function for timestamping with aria2/axel
-__timestamping_download()
-{
-    local URL="$1"
-    local TARGETFILE="$2"
-    local DOWNLOAD_CMD="$3"  # will be "__aria2 ..." or "__axel ..."
-
-    # If file doesn't exist, just download
-    [ ! -f "$TARGETFILE" ] && eval "$DOWNLOAD_CMD" && return
-
-    # Get Last-Modified header
-    local remote_modified="$(url_get_header "$URL" "Last-Modified")"
-
-    if [ -z "$remote_modified" ] ; then
-        info "Warning: Server did not provide Last-Modified header, downloading anyway"
-        eval "$DOWNLOAD_CMD"
-        return
-    fi
-
-    # Convert HTTP date to unix timestamp
-    local remote_timestamp="$(date -d "$remote_modified" '+%s' 2>/dev/null)"
-    if [ -z "$remote_timestamp" ] ; then
-        info "Warning: Could not parse Last-Modified date '$remote_modified', downloading anyway"
-        eval "$DOWNLOAD_CMD"
-        return
-    fi
-
-    # Get local file timestamp
-    local local_timestamp="$(stat -c '%Y' "$TARGETFILE" 2>/dev/null)"
-    [ -z "$local_timestamp" ] && local_timestamp=0
-
-    # Compare timestamps
-    if [ "$remote_timestamp" -gt "$local_timestamp" ] ; then
-        info "Remote file is newer, downloading..."
-        eval "$DOWNLOAD_CMD" || return 1
-        # Set timestamp from server
-        touch -d "$remote_modified" "$TARGETFILE" 2>/dev/null
-    else
-        info "Local file is up to date, skipping download"
-    fi
 }
 
 # download to default name of to $2
