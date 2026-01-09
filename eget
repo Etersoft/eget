@@ -350,9 +350,6 @@ CURLTRUSTSERVERNAMES=''
 
 USEOUTPUTDIR=''
 WGETNODIRECTORIES=''
-WGETCONTINUE=''
-CURLCONTINUE=''
-ARIA2CONTINUE=''
 CONTINUE=''
 FORCEOVERWRITE=''
 WGETTIMEOUT=''
@@ -384,8 +381,6 @@ CURLSHOWPROGRESS=''
 ARIA2SHOWPROGRESS=''
 AXELSHOWPROGRESS=''
 
-WGETTIMESTAMPING=''
-CURLTIMESTAMPING=''
 TIMESTAMPING=''
 INPUTFILE=''
 
@@ -599,21 +594,15 @@ while [ -n "$1" ] ; do
             ;;
         -c|--continue)
             CONTINUE=1
-            WGETCONTINUE="$1"
-            CURLCONTINUE="-C -"
             # curl: --continue-at and --remote-header-name cannot be combined
             CURLFILENAMEOPTIONS='--remote-name --remote-time'
             CURLNAMEOPTIONS='--remote-time'
-            ARIA2CONTINUE="--continue=true"
-            AXELCONTINUE=""
             ;;
         --force|--allow-overwrite)
             FORCEOVERWRITE=1
             ;;
         -N|--timestamping)
             TIMESTAMPING="1"
-            WGETTIMESTAMPING="-N"
-            CURLTIMESTAMPING="1"
             ;;
         -i|--input-file)
             if [ -z "$argvalue" ];then
@@ -1087,7 +1076,15 @@ __wget()
 {
     [ -n "$USERAGENT" ] && set -- -U "$USERAGENT" "$@"
     [ -n "$USEOUTPUTDIR" ] && set -- -P "$USEOUTPUTDIR" "$@"
-    docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETCONTINUE $WGETTIMESTAMPING $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
+    docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
+}
+
+# wget wrapper for downloads (adds -c/-N flags)
+__wget_download()
+{
+    [ -n "$CONTINUE" ] && set -- -c "$@"
+    [ -n "$TIMESTAMPING" ] && set -- -N "$@"
+    __wget "$@"
 }
 
 # Helper function for timestamping with aria2/axel (needs to be outside backend blocks)
@@ -1289,20 +1286,20 @@ url_sget()
        scat "$URL"
        return
     elif [ -n "$2" ] ; then
-       download_with_mirroring __wget "$URL" -O "$2"
+       download_with_mirroring __wget_download "$URL" -O "$2"
        return
     fi
 # TODO: поддержка rsync для известных хостов?
 # Не качать, если одинаковый размер и дата
 # -nc
 # TODO: overwrite always
-    download_with_mirroring __wget "$URL" $WGETNAMEOPTIONS
+    download_with_mirroring __wget_download "$URL" $WGETNAMEOPTIONS
 }
 
 url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
-    download_with_mirroring __wget $WGETNAMEOPTIONS "$@"
+    download_with_mirroring __wget_download $WGETNAMEOPTIONS "$@"
 }
 
 # Download file with mirror fallback (try each URL until success)
@@ -1310,7 +1307,7 @@ sget_with_mirrors()
 {
     local URL
     for URL in "$@" ; do
-        __wget $WGETNAMEOPTIONS "$URL" && return 0
+        __wget_download $WGETNAMEOPTIONS "$URL" && return 0
     done
     return 1
 }
@@ -1336,7 +1333,14 @@ __curl()
 {
     [ -n "$USERAGENT" ] && set -- -A "$USERAGENT" "$@"
     [ -n "$USEOUTPUTDIR" ] && set -- --create-dirs --output-dir "$USEOUTPUTDIR" "$@"
-    docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLSHOWPROGRESS $CURLCOMPRESSED $CURLHEADER $CURLNOSSLCHECK $CURLCONTINUE $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES $EGET_CURL_OPTIONS "$@"
+    docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLSHOWPROGRESS $CURLCOMPRESSED $CURLHEADER $CURLNOSSLCHECK $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES $EGET_CURL_OPTIONS "$@"
+}
+
+# curl wrapper for downloads (adds -C - for continue)
+__curl_download()
+{
+    [ -n "$CONTINUE" ] && set -- -C - "$@"
+    __curl "$@"
 }
 # put remote content to stdout
 url_scat()
@@ -1370,37 +1374,37 @@ url_sget()
        scat "$1"
        return
     elif [ -n "$2" ] ; then
-       if [ -n "$CURLTIMESTAMPING" ] && [ -f "$2" ] ; then
+       if [ -n "$TIMESTAMPING" ] && [ -f "$2" ] ; then
            __curl_check_timestamp "$URL"
-           download_with_mirroring __curl "$URL" -z "$2" --output "$2"
+           download_with_mirroring __curl_download "$URL" -z "$2" --output "$2"
        else
-           download_with_mirroring __curl "$URL" --output "$2"
+           download_with_mirroring __curl_download "$URL" --output "$2"
        fi
        return
     fi
 
     local FILENAME="$(url_get_filename "$URL")"
     if [ -n "$FILENAME" ] ; then
-        if [ -n "$CURLTIMESTAMPING" ] && [ -f "$FILENAME" ] ; then
+        if [ -n "$TIMESTAMPING" ] && [ -f "$FILENAME" ] ; then
             __curl_check_timestamp "$URL"
-            download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLNAMEOPTIONS --output "$FILENAME"
+            download_with_mirroring __curl_download "$URL" -z "$FILENAME" $CURLNAMEOPTIONS --output "$FILENAME"
         else
-            download_with_mirroring __curl "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
+            download_with_mirroring __curl_download "$URL" $CURLNAMEOPTIONS --output "$FILENAME"
         fi
         return
     fi
 
-    if [ -n "$CURLTIMESTAMPING" ] ; then
+    if [ -n "$TIMESTAMPING" ] ; then
         # Need to get filename first to use -z
         FILENAME="$(basename "$URL")"
         if [ -f "$FILENAME" ] ; then
             __curl_check_timestamp "$URL"
-            download_with_mirroring __curl "$URL" -z "$FILENAME" $CURLFILENAMEOPTIONS
+            download_with_mirroring __curl_download "$URL" -z "$FILENAME" $CURLFILENAMEOPTIONS
         else
-            download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
+            download_with_mirroring __curl_download "$URL" $CURLFILENAMEOPTIONS
         fi
     else
-        download_with_mirroring __curl "$URL" $CURLFILENAMEOPTIONS
+        download_with_mirroring __curl_download "$URL" $CURLFILENAMEOPTIONS
     fi
 }
 
@@ -1413,7 +1417,7 @@ url_pget()
     for URL in "$@" ; do
         args="$args $CURLFILENAMEOPTIONS $URL"
     done
-    __curl --parallel $args
+    __curl_download --parallel $args
 }
 
 # Download file with mirror fallback (try each URL until success)
@@ -1421,7 +1425,7 @@ sget_with_mirrors()
 {
     local URL
     for URL in "$@" ; do
-        __curl $CURLFILENAMEOPTIONS "$URL" && return 0
+        __curl_download $CURLFILENAMEOPTIONS "$URL" && return 0
     done
     return 1
 }
@@ -1430,6 +1434,7 @@ url_get_response()
 {
     local URL="$1"
     local answer
+    # Don't use -C - for header requests
     answer="$(quiet=1 __curl --max-time 20 --retry 0 -LI "$URL" 2>&1)"
     # HTTP/1.1 405 Method Not Allowed
     # HTTP/1.1 404 Not Found
@@ -1444,7 +1449,14 @@ elif [ "$EGET_BACKEND" = "aria2" ] ; then
 __aria2()
 {
     [ -n "$USEOUTPUTDIR" ] && set -- -d "$USEOUTPUTDIR" "$@"
-    docmd $ARIA2 $ARIA2Q $ARIA2SHOWPROGRESS $ARIA2CONTINUE $EGET_ARIA2_OPTIONS "$@"
+    docmd $ARIA2 $ARIA2Q $ARIA2SHOWPROGRESS $EGET_ARIA2_OPTIONS "$@"
+}
+
+# aria2 wrapper for downloads (adds --continue)
+__aria2_download()
+{
+    [ -n "$CONTINUE" ] && set -- --continue=true "$@"
+    __aria2 "$@"
 }
 
 # put remote content to stdout
@@ -1468,9 +1480,9 @@ url_sget()
        return
     elif [ -n "$2" ] ; then
        if [ -n "$TIMESTAMPING" ] ; then
-           __timestamping_download "$URL" "$2" "download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o \"$2\" \"$URL\""
+           __timestamping_download "$URL" "$2" "download_with_mirroring __aria2_download -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o \"$2\" \"$URL\""
        else
-           download_with_mirroring __aria2 -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o "$2" "$URL"
+           download_with_mirroring __aria2_download -x1 -s1 --allow-piece-length-change=false --allow-overwrite=true -o "$2" "$URL"
        fi
        return
     fi
@@ -1480,16 +1492,16 @@ url_sget()
         # Get filename first for timestamping
         local FILENAME="$(url_get_filename "$URL")"
         [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
-        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __aria2 --allow-overwrite=true \"$URL\""
+        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __aria2_download --allow-overwrite=true \"$URL\""
     else
-        download_with_mirroring __aria2 --allow-overwrite=true "$URL"
+        download_with_mirroring __aria2_download --allow-overwrite=true "$URL"
     fi
 }
 
 url_pget()
 {
     #[ -n "$USEOUTPUTDIR" ] || fatal "USEOUTPUTDIR is not set"
-    echo "$@" | xargs -n1 | download_with_mirroring __aria2 --allow-overwrite=true -i-
+    echo "$@" | xargs -n1 | download_with_mirroring __aria2_download --allow-overwrite=true -i-
 }
 
 # Download file from multiple mirrors simultaneously (TAB-separated for aria2)
@@ -1497,7 +1509,7 @@ sget_with_mirrors()
 {
     # aria2 supports multiple URLs for same file separated by TAB
     local tab_urls="$(echo "$@" | tr ' ' '\t')"
-    echo "$tab_urls" | __aria2 -i-
+    echo "$tab_urls" | __aria2_download -i-
 }
 
 # use __wget for headers (aria2/axel don't support this natively)
@@ -1523,7 +1535,14 @@ __axel()
     [ -n "$AXELSHOWPROGRESS" ] && AXELQ_LOCAL=''
     [ -n "$USERAGENT" ] && set -- --user-agent="$USERAGENT" "$@"
     # Note: axel doesn't support output directory, only output file (-o)
-    docmd $AXEL $FORCEIPV $AXELQ_LOCAL $AXELCONTINUE $AXELTIMEOUT $AXELHEADER $AXELNOSSLCHECK $EGET_AXEL_OPTIONS "$@"
+    docmd $AXEL $FORCEIPV $AXELQ_LOCAL $AXELTIMEOUT $AXELHEADER $AXELNOSSLCHECK $EGET_AXEL_OPTIONS "$@"
+}
+
+# axel wrapper for downloads
+# Note: axel auto-continues if state file (.st) exists, no explicit flag needed
+__axel_download()
+{
+    __axel "$@"
 }
 
 # Remove target file and state file before download (axel can't overwrite)
@@ -1554,11 +1573,11 @@ url_sget()
        return
     elif [ -n "$2" ] ; then
        if [ -n "$TIMESTAMPING" ] ; then
-           __timestamping_download "$URL" "$2" "download_with_mirroring __axel --alternate -o \"$2\" \"$URL\""
+           __timestamping_download "$URL" "$2" "download_with_mirroring __axel_download --alternate -o \"$2\" \"$URL\""
        else
            # axel can't overwrite, clean first
            __axel_clean "$2"
-           download_with_mirroring __axel --alternate -o "$2" "$URL"
+           download_with_mirroring __axel_download --alternate -o "$2" "$URL"
        fi
        return
     fi
@@ -1567,11 +1586,11 @@ url_sget()
     local FILENAME="$(url_get_filename "$URL")"
     [ -z "$FILENAME" ] && FILENAME="$(basename "$URL")"
     if [ -n "$TIMESTAMPING" ] ; then
-        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __axel --alternate \"$URL\""
+        __timestamping_download "$URL" "$FILENAME" "download_with_mirroring __axel_download --alternate \"$URL\""
     else
         # axel can't overwrite, clean first
         __axel_clean "$FILENAME"
-        download_with_mirroring __axel --alternate "$URL"
+        download_with_mirroring __axel_download --alternate "$URL"
     fi
 }
 
@@ -1586,7 +1605,7 @@ url_pget()
         # axel can't overwrite, clean first
         FILENAME="$(basename "$URL")"
         __axel_clean "$FILENAME"
-        download_with_mirroring __axel --alternate "$URL"
+        download_with_mirroring __axel_download --alternate "$URL"
     done
     cd "$oldpwd"
 }
@@ -1599,7 +1618,7 @@ sget_with_mirrors()
     [ -n "$USEOUTPUTDIR" ] && { cd "$USEOUTPUTDIR" || return 1; }
     # axel can't overwrite, clean first (all URLs point to same file)
     __axel_clean "$(basename "$1")"
-    __axel --alternate "$@"
+    __axel_download --alternate "$@"
     [ -n "$USEOUTPUTDIR" ] && cd "$oldpwd"
 }
 
