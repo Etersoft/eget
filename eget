@@ -601,6 +601,9 @@ while [ -n "$1" ] ; do
             CONTINUE=1
             WGETCONTINUE="$1"
             CURLCONTINUE="-C -"
+            # curl: --continue-at and --remote-header-name cannot be combined
+            CURLFILENAMEOPTIONS='--remote-name --remote-time'
+            CURLNAMEOPTIONS='--remote-time'
             ARIA2CONTINUE="--continue=true"
             AXELCONTINUE=""
             ;;
