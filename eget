@@ -292,6 +292,71 @@ is_numeric()
     echo "$1" | grep -qE '^[0-9]+$'
 }
 
+# Calculate average with outlier filtering (2σ rule)
+# Input: space-separated values
+# Output: average after removing outliers (values > 2σ from mean)
+__calc_avg_filtered()
+{
+    local values="$1"
+    local n=$(echo "$values" | wc -w)
+    [ "$n" -lt 2 ] && { echo "$values" | awk '{print $1}'; return; }
+
+    # Calculate mean and standard deviation, filter outliers, return average
+    echo "$values" | awk '{
+        n = NF
+        sum = 0
+        for (i = 1; i <= n; i++) sum += $i
+        avg = sum / n
+
+        # Calculate standard deviation
+        sum2 = 0
+        for (i = 1; i <= n; i++) sum2 += ($i - avg)^2
+        std = sqrt(sum2 / n)
+
+        # Filter: keep values within 2*std of mean
+        fsum = 0; fn = 0
+        for (i = 1; i <= n; i++) {
+            diff = $i - avg
+            if (diff < 0) diff = -diff
+            if (diff <= 2 * std) { fsum += $i; fn++ }
+        }
+
+        if (fn > 0) printf "%.2f", fsum / fn
+        else printf "%.2f", avg
+    }'
+}
+
+# Single speedtest measurement with timeout (returns speed in MB/s)
+# Downloads to temp file using eget, counts bytes with pv or wc -c
+# Args: URL [timeout] [total_size]
+__speedtest_single()
+{
+    local URL="$1"
+    local timeout="${2:-3}"
+    local total_size="$3"
+    local tmpfile start_time end_time size
+
+    tmpfile=$(mktemp)
+    start_time=$(date +%s.%N)
+    if [ -n "$verbose" ] && which pv >/dev/null 2>&1 ; then
+        # pv shows progress to stderr (-s for total size if known)
+        local pv_opts="-f"
+        [ -n "$total_size" ] && pv_opts="$pv_opts -s $total_size"
+        timeout "$timeout" eget -q -O - "$URL" 2>/dev/null | pv $pv_opts > "$tmpfile" || true
+    else
+        timeout "$timeout" eget -q --force -O "$tmpfile" "$URL" 2>/dev/null || true
+    fi
+    end_time=$(date +%s.%N)
+    size=$(wc -c < "$tmpfile")
+    rm -f "$tmpfile"
+
+    # Calculate speed: size / time in MB/s
+    echo "$size $start_time $end_time" | awk '{
+        time = $3 - $2
+        if (time > 0) printf "%.2f", ($1 / time) / 1024 / 1024
+        else print "0"
+    }'
+}
 
 # args: cmd <URL> <options>
 # will run cmd <options> <URL>
@@ -354,6 +419,7 @@ CONTINUE=''
 FORCEOVERWRITE=''
 WGETTIMEOUT=''
 CURLMAXTIME=''
+TIMEOUT_VALUE=''
 WGETREADTIMEOUT=''
 WGETRETRYCONNREFUSED=''
 CURLRETRYCONNREFUSED=''
@@ -575,6 +641,12 @@ while [ -n "$1" ] ; do
         --get-filesize)
             GETFILESIZE="$1"
             ;;
+        --speedtest)
+            SPEEDTEST="$1"
+            ;;
+        --tsv)
+            TSV="$1"
+            ;;
         --latest)
             LATEST="$1"
             ;;
@@ -627,6 +699,7 @@ while [ -n "$1" ] ; do
             WGETTIMEOUT="--timeout $argvalue"
             CURLMAXTIME="--max-time $argvalue"
             AXELTIMEOUT="--timeout=$argvalue"
+            TIMEOUT_VALUE="$argvalue"
             ;;
         --read-timeout)
             if [ -z "$argvalue" ];then
@@ -1331,7 +1404,6 @@ url_get_response()
     echo "$answer"
 }
 
-
 elif [ "$EGET_BACKEND" = "curl" ] ; then
 
 __curl()
@@ -1709,6 +1781,35 @@ url_get_real_url()
 else
     fatal "Unknown EGET_BACKEND '$EGET_BACKEND', logical error."
 fi
+
+url_speedtest()
+{
+    local URL="$1"
+    local timeout="${TIMEOUT_VALUE:-3}"
+    local total_size
+    local measurements=""
+    local i speed
+
+    # Get file size for progress display
+    total_size=$(url_get_size "$URL")
+
+    for i in 1 2 3 ; do
+        [ -n "$verbose" ] && echo "Measurement $i/3..." >&2
+        speed=$(__speedtest_single "$URL" "$timeout" "$total_size")
+        measurements="$measurements $speed"
+        [ -n "$verbose" ] && echo "  Speed: ${speed} MB/s" >&2
+    done
+
+    local avg_speed=$(__calc_avg_filtered "$measurements")
+
+    if [ -n "$TSV" ] ; then
+        printf '%s\t%s\n' "$URL" "$avg_speed"
+    else
+        echo "URL: $URL"
+        [ -n "$verbose" ] && echo "Measurements:$measurements MB/s"
+        echo "Average Speed: ${avg_speed} MB/s"
+    fi
+}
 
 
 # Common code for both wget and curl and aria2 (http related)
@@ -2250,6 +2351,15 @@ if [ -n "$GETRESPONSE" ] ; then
     exit
 fi
 
+if [ -n "$SPEEDTEST" ] ; then
+    URL="$1"
+    if ! check_url_is_available "$URL" ; then
+        [ -n "$verbose" ] && echo "$URL is NOT accessible via network or file does not exist" >&2
+        exit 1
+    fi
+    url_speedtest "$URL"
+    exit
+fi
 
 # separate part for github downloads
 if echo "$1" | grep -q "^https://github.com/" && \
