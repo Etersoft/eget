@@ -370,6 +370,7 @@ GETRESPONSE=''
 GETFILENAME=''
 GETREALURL=''
 GETIPFSCID=''
+GETFILESIZE=''
 LATEST=''
 SECONDLATEST=''
 CHECKMIRRORS=''
@@ -446,6 +447,7 @@ Options:
     --check-site URL          - check if the site is accessible (returns HTTP 200 OK or 404 Not found)
     --get-response URL        - get response with all headers (ever if HEAD is not acceptable)
     --get-filename URL        - print filename for the URL (via Content-Disposition if applicable)
+    --get-filesize URL        - print file size in bytes (via Content-Length)
     --get-real-url URL        - print URL after all redirects
     --get-ipfs-cid URL        - print CID for URL (after all redirects)
 
@@ -569,6 +571,9 @@ while [ -n "$1" ] ; do
             ;;
         --get-ipfs-cid)
             GETIPFSCID="$1"
+            ;;
+        --get-filesize)
+            GETFILESIZE="$1"
             ;;
         --latest)
             LATEST="$1"
@@ -1734,6 +1739,11 @@ url_get_header()
     url_get_headers "$URL" | grep -i "^ *$HEADER: " | sed -e "s|^ *$HEADER: ||i"
 }
 
+url_get_size()
+{
+    url_get_header "$1" "Content-Length" | tr -d '\r'
+}
+
 url_get_raw_real_url()
 {
     local URL="$1"
@@ -1875,6 +1885,11 @@ sget()
 
     if [ -n "$GETFILENAME" ] ; then
         get_filename "$URL"
+        exit
+    fi
+
+    if [ -n "$GETFILESIZE" ] ; then
+        url_get_size "$URL"
         exit
     fi
 
@@ -2029,6 +2044,11 @@ sget()
 
     if [ -n "$GETFILENAME" ] ; then
         get_filename "$URL"
+        exit
+    fi
+
+    if [ -n "$GETFILESIZE" ] ; then
+        url_get_size "$URL"
         exit
     fi
 
