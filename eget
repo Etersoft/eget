@@ -389,46 +389,39 @@ download_with_mirroring()
 
 check_tty
 
+# Common option flags (used by all backends)
 quiet=''
 verbose=''
-WGETNOSSLCHECK=''
-CURLNOSSLCHECK=''
-AXELNOSSLCHECK=''
+showprogress=''
+nosslcheck=''
+compressed=''
+retryconnrefused=''
+trustservernames=''
+nodirectories=''
+
+# Common option values
 USERAGENT=''
-WGETHEADER=''
-CURLHEADER=''
-AXELHEADER=''
-WGETCOMPRESSED=''
-CURLCOMPRESSED=''
-AXELCOMPRESSED=''
-WGETQ='' #-q
-CURLQ='' #-s
-AXELQ='' #-q
-ARIA2Q=''
-# TODO: 
+HEADER_VALUE=''
+TIMEOUT_VALUE=''
+READTIMEOUT_VALUE=''
+TRIES_VALUE=''
+COOKIES_FILE=''
+USEOUTPUTDIR=''
+FORCEIPV=''
+
+# Download behavior
+CONTINUE=''
+FORCEOVERWRITE=''
+TIMESTAMPING=''
+NOGLOB=''
+
+# Name/disposition options (passed as arguments, not built into __wget/__curl)
 WGETNAMEOPTIONS='--content-disposition'
 CURLFILENAMEOPTIONS='--remote-name --remote-time --remote-header-name'
 CURLNAMEOPTIONS='--remote-time --remote-header-name'
 AXELNAMEOPTIONS=''
-WGETRUSTSERVERNAMES=''
-CURLTRUSTSERVERNAMES=''
 
-USEOUTPUTDIR=''
-WGETNODIRECTORIES=''
-CONTINUE=''
-FORCEOVERWRITE=''
-WGETTIMEOUT=''
-CURLMAXTIME=''
-TIMEOUT_VALUE=''
-WGETREADTIMEOUT=''
-WGETRETRYCONNREFUSED=''
-CURLRETRYCONNREFUSED=''
-WGETTRIES='--tries 1'
-CURLRETRY=''
-WGETLOADCOOKIES=''
-CURLCOOKIE=''
-
-NOGLOB=''
+# Query/action modes
 LISTONLY=''
 CHECKURL=''
 CHECKSITE=''
@@ -441,31 +434,15 @@ LATEST=''
 SECONDLATEST=''
 CHECKMIRRORS=''
 TARGETFILE=''
-FORCEIPV=''
-
-WGETSHOWPROGRESS=''
-CURLSHOWPROGRESS=''
-ARIA2SHOWPROGRESS=''
-AXELSHOWPROGRESS=''
-
-TIMESTAMPING=''
 INPUTFILE=''
 
 set_quiet()
 {
-    WGETQ='-q'
-    CURLQ='-s'
-    AXELQ='--quiet'
-    ARIA2Q=''
     quiet=1
 }
 
 unset_quiet()
 {
-    WGETQ=''
-    CURLQ=''
-    AXELQ=''
-    ARIA2Q=''
     quiet=''
 }
 
@@ -566,15 +543,10 @@ while [ -n "$1" ] ; do
             verbose="$1"
             ;;
         --show-progress)
-            WGETSHOWPROGRESS='--show-progress'
-            CURLSHOWPROGRESS='--progress-bar'
-            ARIA2SHOWPROGRESS='--show-console-readout=true'
-            AXELSHOWPROGRESS='1'
+            showprogress=1
             ;;
         -k|--no-check-certificate)
-            WGETNOSSLCHECK='--no-check-certificate'
-            CURLNOSSLCHECK='-k'
-            AXELNOSSLCHECK='--insecure'
+            nosslcheck=1
             ;;
         --no-content-disposition)
             WGETNAMEOPTIONS=''
@@ -589,9 +561,7 @@ while [ -n "$1" ] ; do
                 argvalue="$(printf '%s' "$1" | tr -d ' ')"
             fi
             [ -z "$argvalue" ] && fatal "Error: --header requires an argument"
-            WGETHEADER="--header=$argvalue"
-            CURLHEADER="--header $argvalue"
-            AXELHEADER="--header=$argvalue"
+            HEADER_VALUE="$argvalue"
             ;;
         -P|--output-dir)
             if [ -z "$argvalue" ];then
@@ -605,8 +575,7 @@ while [ -n "$1" ] ; do
             USERAGENT="Mozilla/5.0 (X11; Linux $arch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
             ;;
         --compressed)
-            CURLCOMPRESSED='--compressed'
-            WGETCOMPRESSED='--compression=auto'
+            compressed=1
             ;;
         -4|--ipv4|--inet4-only)
             FORCEIPV="-4"
@@ -664,7 +633,7 @@ while [ -n "$1" ] ; do
             TARGETFILE="-"
             ;;
         -nd|--no-directories)
-            WGETNODIRECTORIES="$1"
+            nodirectories=1
             ;;
         --no-glob)
             NOGLOB="--no-glob"
@@ -696,9 +665,6 @@ while [ -n "$1" ] ; do
             fi
             [ -z "$argvalue" ] && fatal "Error: --timeout requires an argument"
             ! is_numeric "$argvalue" && fatal "Error: --timeout requires a numeric value, got '$argvalue'"
-            WGETTIMEOUT="--timeout $argvalue"
-            CURLMAXTIME="--max-time $argvalue"
-            AXELTIMEOUT="--timeout=$argvalue"
             TIMEOUT_VALUE="$argvalue"
             ;;
         --read-timeout)
@@ -708,21 +674,13 @@ while [ -n "$1" ] ; do
             fi
             [ -z "$argvalue" ] && fatal "Error: --read-timeout requires an argument"
             ! is_numeric "$argvalue" && fatal "Error: --read-timeout requires a numeric value, got '$argvalue'"
-            WGETREADTIMEOUT="--read-timeout $argvalue"
-            if [ -z "$CURLMAXTIME" ] ; then
-                CURLMAXTIME="--max-time $argvalue"
-            fi
-            if [ -z "$AXELTIMEOUT" ] ; then
-                AXELTIMEOUT="--timeout=$argvalue"
-            fi
+            READTIMEOUT_VALUE="$argvalue"
             ;;
         --retry-connrefused)
-            WGETRETRYCONNREFUSED="$1"
-            CURLRETRYCONNREFUSED="$1"
+            retryconnrefused=1
             ;;
         --trust-server-names)
-            WGETRUSTSERVERNAMES="--trust-server-names"
-            CURLTRUSTSERVERNAMES="-w '%{url_effective}'"
+            trustservernames=1
             ;;
         -t|--tries)
             if [ -z "$argvalue" ];then
@@ -733,16 +691,14 @@ while [ -n "$1" ] ; do
 
             case "$argvalue" in
                 0|inf)
-                    CURLRETRY="--retry 1000"
-                    WGETTRIES="--tries $argvalue"
+                    TRIES_VALUE="$argvalue"
                     ;;
 
                 *)
                     if ! is_numeric "$argvalue" ; then
                         fatal "Invalid value for --tries: '$argvalue' (must be a number, 0, or 'inf')"
                     fi
-                    WGETTRIES="--tries $argvalue"
-                    CURLRETRY="--retry $(($argvalue-1))"
+                    TRIES_VALUE="$argvalue"
                     ;;
             esac
             ;;
@@ -752,8 +708,7 @@ while [ -n "$1" ] ; do
                 argvalue="$1"
             fi
             [ -z "$argvalue" ] && fatal "Error: --load-cookies requires an argument"
-            WGETLOADCOOKIES="--load-cookies $argvalue"
-            CURLCOOKIE="--cookie $argvalue"
+            COOKIES_FILE="$argvalue"
             ;;
         -*)
             fatal "Unknown option '$1', check eget --help."
@@ -1152,9 +1107,24 @@ esac
 # Defined globally so it can be used by aria2/axel backends for header operations
 __wget()
 {
-    [ -n "$USERAGENT" ] && set -- -U "$USERAGENT" "$@"
-    [ -n "$USEOUTPUTDIR" ] && set -- -P "$USEOUTPUTDIR" "$@"
-    docmd $WGET $FORCEIPV $WGETQ $WGETSHOWPROGRESS $NOGLOB $WGETCOMPRESSED $WGETHEADER $WGETNOSSLCHECK $WGETNODIRECTORIES $WGETTIMEOUT $WGETREADTIMEOUT $WGETRETRYCONNREFUSED $WGETTRIES $WGETLOADCOOKIES $WGETRUSTSERVERNAMES $EGET_WGET_OPTIONS "$@"
+    [ "$USEOUTPUTDIR" ] && set -- -P "$USEOUTPUTDIR" "$@"
+    [ "$USERAGENT" ] && set -- -U "$USERAGENT" "$@"
+    [ "$trustservernames" ] && set -- --trust-server-names "$@"
+    [ "$COOKIES_FILE" ] && set -- --load-cookies "$COOKIES_FILE" "$@"
+    # Default: --tries 1 (single attempt), can be overridden
+    set -- --tries "${TRIES_VALUE:-1}" "$@"
+    [ "$retryconnrefused" ] && set -- --retry-connrefused "$@"
+    [ "$READTIMEOUT_VALUE" ] && set -- --read-timeout "$READTIMEOUT_VALUE" "$@"
+    [ "$TIMEOUT_VALUE" ] && set -- --timeout "$TIMEOUT_VALUE" "$@"
+    [ "$nodirectories" ] && set -- -nd "$@"
+    [ "$nosslcheck" ] && set -- --no-check-certificate "$@"
+    [ "$HEADER_VALUE" ] && set -- --header="$HEADER_VALUE" "$@"
+    [ "$compressed" ] && set -- --compression=auto "$@"
+    [ "$NOGLOB" ] && set -- --no-glob "$@"
+    [ "$showprogress" ] && set -- --show-progress "$@"
+    [ "$quiet" ] && set -- -q "$@"
+    [ "$FORCEIPV" ] && set -- "$FORCEIPV" "$@"
+    docmd $WGET $EGET_WGET_OPTIONS "$@"
 }
 
 # wget wrapper for downloads (adds -c/-N flags)
@@ -1408,9 +1378,29 @@ elif [ "$EGET_BACKEND" = "curl" ] ; then
 
 __curl()
 {
-    [ -n "$USERAGENT" ] && set -- -A "$USERAGENT" "$@"
-    [ -n "$USEOUTPUTDIR" ] && set -- --create-dirs --output-dir "$USEOUTPUTDIR" "$@"
-    docmd $CURL $FORCEIPV --fail -L $CURLQ $CURLSHOWPROGRESS $CURLCOMPRESSED $CURLHEADER $CURLNOSSLCHECK $CURLMAXTIME $CURLRETRYCONNREFUSED $CURLRETRY $CURLCOOKIE $CURLTRUSTSERVERNAMES $EGET_CURL_OPTIONS "$@"
+    [ "$USEOUTPUTDIR" ] && set -- --create-dirs --output-dir "$USEOUTPUTDIR" "$@"
+    [ "$USERAGENT" ] && set -- -A "$USERAGENT" "$@"
+    [ "$trustservernames" ] && set -- -w '%{url_effective}' "$@"
+    [ "$COOKIES_FILE" ] && set -- --cookie "$COOKIES_FILE" "$@"
+    # curl --retry is number of retries (not tries), so subtract 1
+    if [ "$TRIES_VALUE" ] ; then
+        case "$TRIES_VALUE" in
+            0|inf) set -- --retry 1000 "$@" ;;
+            *)     set -- --retry $(($TRIES_VALUE - 1)) "$@" ;;
+        esac
+    fi
+    [ "$retryconnrefused" ] && set -- --retry-connrefused "$@"
+    # curl uses READTIMEOUT_VALUE as fallback for --max-time if TIMEOUT_VALUE not set
+    [ -z "$TIMEOUT_VALUE" ] && [ "$READTIMEOUT_VALUE" ] && set -- --max-time "$READTIMEOUT_VALUE" "$@"
+    [ "$TIMEOUT_VALUE" ] && set -- --max-time "$TIMEOUT_VALUE" "$@"
+    [ "$nosslcheck" ] && set -- -k "$@"
+    [ "$HEADER_VALUE" ] && set -- --header "$HEADER_VALUE" "$@"
+    [ "$compressed" ] && set -- --compressed "$@"
+    [ "$showprogress" ] && set -- --progress-bar "$@"
+    [ "$quiet" ] && set -- -s "$@"
+    [ "$FORCEIPV" ] && set -- "$FORCEIPV" "$@"
+    set -- --fail -L "$@"
+    docmd $CURL $EGET_CURL_OPTIONS "$@"
 }
 
 # curl wrapper for downloads (adds -C - for continue)
@@ -1525,8 +1515,10 @@ url_get_response()
 elif [ "$EGET_BACKEND" = "aria2" ] ; then
 __aria2()
 {
-    [ -n "$USEOUTPUTDIR" ] && set -- -d "$USEOUTPUTDIR" "$@"
-    docmd $ARIA2 $ARIA2Q $ARIA2SHOWPROGRESS $EGET_ARIA2_OPTIONS "$@"
+    [ "$USEOUTPUTDIR" ] && set -- -d "$USEOUTPUTDIR" "$@"
+    [ "$showprogress" ] && set -- --show-console-readout=true "$@"
+    # aria2 has no direct quiet flag, but --show-console-readout=false reduces output
+    docmd $ARIA2 $EGET_ARIA2_OPTIONS "$@"
 }
 
 # aria2 wrapper for downloads (adds --continue)
@@ -1607,12 +1599,15 @@ url_get_response()
 elif [ "$EGET_BACKEND" = "axel" ] ; then
 __axel()
 {
-    local AXELQ_LOCAL="$AXELQ"
+    [ "$USERAGENT" ] && set -- --user-agent="$USERAGENT" "$@"
+    [ "$nosslcheck" ] && set -- --insecure "$@"
+    [ "$HEADER_VALUE" ] && set -- --header="$HEADER_VALUE" "$@"
+    [ "$TIMEOUT_VALUE" ] && set -- --timeout="$TIMEOUT_VALUE" "$@"
     # --show-progress overrides --quiet for axel
-    [ -n "$AXELSHOWPROGRESS" ] && AXELQ_LOCAL=''
-    [ -n "$USERAGENT" ] && set -- --user-agent="$USERAGENT" "$@"
+    [ "$quiet" ] && [ -z "$showprogress" ] && set -- --quiet "$@"
+    [ "$FORCEIPV" ] && set -- "$FORCEIPV" "$@"
     # Note: axel doesn't support output directory, only output file (-o)
-    docmd $AXEL $FORCEIPV $AXELQ_LOCAL $AXELTIMEOUT $AXELHEADER $AXELNOSSLCHECK $EGET_AXEL_OPTIONS "$@"
+    docmd $AXEL $EGET_AXEL_OPTIONS "$@"
 }
 
 # axel wrapper for downloads
