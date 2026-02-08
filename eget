@@ -305,6 +305,12 @@ is_numeric()
     return 0
 }
 
+is_protocol_relative_url()
+{
+    case "$1" in //*) return 0 ;; esac
+    return 1
+}
+
 # Calculate average with outlier filtering (2σ rule)
 # Input: space-separated values
 # Output: average after removing outliers (values > 2σ from mean)
@@ -1865,7 +1871,7 @@ url_get_raw_real_url()
     local loc
     for loc in $(url_get_header "$URL" "Location" | tac | sed -e 's| .*||') ; do
         # add protocol if missed
-        if echo "$loc" | grep -q '^//' ; then
+        if is_protocol_relative_url "$loc" ; then
             loc="$(echo "$URL" | sed -e 's|//.*||')$loc"
         fi
         # hack for construct full url from related Location
