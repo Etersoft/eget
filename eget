@@ -1060,15 +1060,9 @@ fi
 
 
 
-WGET="$(print_command_path wget)"
-CURL="$(print_command_path curl)"
-ARIA2="$(print_command_path aria2)"
-AXEL="$(print_command_path axel)"
-RSYNC="$(print_command_path rsync)"
-
 ORIG_EGET_BACKEND="$EGET_BACKEND"
 
-# override backend
+# override backend by URL type
 if is_fileurl "$1" ; then
     EGET_BACKEND="file"
 elif is_ipfsurl "$1" ; then
@@ -1078,16 +1072,22 @@ elif is_rsyncurl "$1" || is_sshurl "$1" ; then
 fi
 
 orig_EGET_BACKEND="$EGET_BACKEND"
-EGET_BACKEND="$(basename "$EGET_BACKEND")"
+EGET_BACKEND="${EGET_BACKEND##*/}"
 
+# lazy backend detection: only check what we actually need
 case "$orig_EGET_BACKEND" in
-    file|ipfs|rsync)
+    file|ipfs)
+        ;;
+    rsync)
+        RSYNC="$(print_command_path rsync)"
+        [ -n "$RSYNC" ] || fatal "There are no rsync in the system. Install it with $ epm install rsync"
         ;;
     */wget)
         WGET="$orig_EGET_BACKEND"
         [ -x "$WGET" ] || fatal "There are no $orig_EGET_BACKEND in the system but you forced using it via EGET_BACKEND. Install it with $ epm install wget"
         ;;
     wget)
+        WGET="$(print_command_path wget)"
         [ -n "$WGET" ] || fatal "There are no wget in the system but you forced using it via EGET_BACKEND. Install it with $ epm install wget"
         ;;
     */curl)
@@ -1095,29 +1095,49 @@ case "$orig_EGET_BACKEND" in
         [ -x "$CURL" ] || fatal "There are no $orig_EGET_BACKEND in the system but you forced using it via EGET_BACKEND. Install it with $ epm install curl"
         ;;
     curl)
+        CURL="$(print_command_path curl)"
         [ -n "$CURL" ] || fatal "There are no curl in the system but you forced using it via EGET_BACKEND. Install it with $ epm install curl"
         ;;
     */aria2)
         ARIA2="$orig_EGET_BACKEND"
         [ -x "$ARIA2" ] || fatal "There are no $orig_EGET_BACKEND in the system but you forced using it via EGET_BACKEND. Install it with $ epm install aria2"
+        # aria2 needs wget for headers and stdout
+        WGET="$(print_command_path wget)"
         ;;
     aria2)
+        ARIA2="$(print_command_path aria2)"
         [ -n "$ARIA2" ] || fatal "There are no aria2 in the system but you forced using it via EGET_BACKEND. Install it with $ epm install aria2"
+        # aria2 needs wget for headers and stdout
+        WGET="$(print_command_path wget)"
         ;;
     */axel)
         AXEL="$orig_EGET_BACKEND"
         [ -x "$AXEL" ] || fatal "There are no $orig_EGET_BACKEND in the system but you forced using it via EGET_BACKEND. Install it with $ epm install axel"
+        # axel needs wget for headers and stdout
+        WGET="$(print_command_path wget)"
         ;;
     axel)
+        AXEL="$(print_command_path axel)"
         [ -n "$AXEL" ] || fatal "There are no axel in the system but you forced using it via EGET_BACKEND. Install it with $ epm install axel"
+        # axel needs wget for headers and stdout
+        WGET="$(print_command_path wget)"
         ;;
     '')
-        [ -n "$WGET" ] && EGET_BACKEND="wget"
-        [ -z "$EGET_BACKEND" ] && [ -n "$CURL" ] && EGET_BACKEND="curl"
-        [ -n "$EGET_BACKEND" ] || fatal "There are no wget nor curl in the system. Install something with $ epm install wget"
+        # default: try wget first, then curl
+        WGET="$(print_command_path wget)"
+        if [ -n "$WGET" ] ; then
+            EGET_BACKEND="wget"
+        else
+            CURL="$(print_command_path curl)"
+            if [ -n "$CURL" ] ; then
+                EGET_BACKEND="curl"
+            else
+                fatal "There are no wget nor curl in the system. Install something with $ epm install wget"
+            fi
+        fi
         ;;
     *)
-        fatal "Uknown EGET_BACKEND $EGET_BACKEND"
+        fatal "Unknown EGET_BACKEND $EGET_BACKEND"
         ;;
 esac
 
