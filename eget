@@ -2374,8 +2374,16 @@ if [ -n "$SPEEDTEST" ] ; then
 fi
 
 # separate part for github downloads
-if echo "$1" | grep -q "^https://github.com/" && \
-   echo "$1" | grep -q -v "/blob/" && echo "$1" | grep -q -v "/download/" && [ -n "$2" ] ; then
+is_github_url()
+{
+    case "$1" in
+        https://github.com/*/blob/*|https://github.com/*/download/*) return 1 ;;
+        https://github.com/*) return 0 ;;
+    esac
+    return 1
+}
+
+if is_github_url "$1" && [ -n "$2" ] ; then
     MASK="$2"
 
     if [ -n "$LISTONLY" ] ; then
