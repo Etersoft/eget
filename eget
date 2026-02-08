@@ -212,18 +212,24 @@ filter_order()
 
 have_end_slash_or_php_parametr()
 {
-    echo "$1" | grep -qE '(/$|\.php($|\?))'
+    case "$1" in
+        */) return 0 ;;
+        *.php|*.php\?*) return 0 ;;
+    esac
+    return 1
 }
 
 is_abs_path()
 {
-    echo "$1" | grep -q '^/'
+    case "$1" in /*) return 0 ;; esac
+    return 1
 }
 
 is_fileurl()
 {
     is_abs_path "$1" && return
-    echo "$1" | grep -q "^file:/"
+    case "$1" in file:/*) return 0 ;; esac
+    return 1
 }
 
 path_from_url()
@@ -233,53 +239,59 @@ path_from_url()
 
 is_url()
 {
-    echo "$1" | grep -q "^[filehtps]*:/"
+    case "$1" in file:/*|http:/*|https:/*|ftp:/*|ftps:/*|ipfs:/*) return 0 ;; esac
+    return 1
 }
 
 is_strange_url()
 {
     local URL="$1"
     is_url "$URL" || return
-    #echo "$URL" | grep -q -E "\.(deb|rpm|zip)\?" && return 1
-    echo "$URL" | grep -q "[?&]"
+    #case "$URL" in *.deb\?*|*.rpm\?*|*.zip\?*) return 1 ;; esac
+    case "$URL" in *"?"*|*"&"*) return 0 ;; esac
+    return 1
 }
 
 is_ipfs_hash()
 {
-    # If a CID is 46 characters starting with "Qm", it's a CIDv0
-    echo "$1" | grep -q -E "^Qm[[:alnum:]]{44}$" && return
+    # CIDv0: starts with Qm, 46 chars, alphanumeric only
+    case "$1" in Qm*) ;; *) return 1 ;; esac
+    case "$1" in *[!A-Za-z0-9]*) return 1 ;; esac
     # TODO: CIDv1 support, see https://github.com/multiformats/cid
-    return 1
+    [ "${#1}" = 46 ]
 }
 
 is_ipfsurl()
 {
     is_ipfs_hash "$1" && return
-    echo "$1" | grep -q "^ipfs://"
+    case "$1" in ipfs://*) return 0 ;; esac
+    return 1
 }
 
 is_httpurl()
 {
-    # TODO: improve
-    echo "$1" | grep -q "^https://" && return
-    echo "$1" | grep -q "^http://" && return
+    case "$1" in http://*|https://*) return 0 ;; esac
+    return 1
 }
 
 is_ftpurl()
 {
-    echo "$1" | grep -q "^ftp://"
+    case "$1" in ftp://*) return 0 ;; esac
+    return 1
 }
 
 is_rsyncurl()
 {
-    echo "$1" | grep -q "^rsync://"
+    case "$1" in rsync://*) return 0 ;; esac
+    return 1
 }
 
 # SSH/rsync URL: user@host:/path or host:/path (but not scheme://)
 is_sshurl()
 {
-    # Match host:path or host:/path, but not scheme://
-    echo "$1" | grep -qE '^[^/:]+:' && ! echo "$1" | grep -q "://"
+    # Exclude scheme:// first, then match host:path
+    case "$1" in *://*) return 1 ;; *:*) return 0 ;; esac
+    return 1
 }
 
 cid_from_url()
@@ -289,7 +301,8 @@ cid_from_url()
 
 is_numeric()
 {
-    echo "$1" | grep -qE '^[0-9]+$'
+    case "$1" in *[!0-9]*|'') return 1 ;; esac
+    return 0
 }
 
 # Calculate average with outlier filtering (2σ rule)
