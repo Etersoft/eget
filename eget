@@ -2198,31 +2198,29 @@ sget()
     url_sget "$@"
 }
 
+# Filter stdin: strip whitespace, skip empty lines and comments
+__filter_comments()
+{
+	local line
+	while IFS= read -r line ; do
+		line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+		[ -z "$line" ] && continue
+		case "$line" in \#*) continue ;; esac
+		echo "$line"
+	done
+}
+
 # Read URLs from file, skip empty lines and comments
 read_urls_from_file()
 {
 	local file="$1"
-	local line
 
 	if [ "$file" = "-" ] ; then
-		# Read from stdin
-		while IFS= read -r line ; do
-			line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-			[ -z "$line" ] && continue
-			echo "$line" | grep -q '^[[:space:]]*#' && continue
-			echo "$line"
-		done
+		__filter_comments
 	else
-		# Read from file
 		[ ! -f "$file" ] && fatal "Error: input file '$file' not found"
 		[ ! -r "$file" ] && fatal "Error: input file '$file' is not readable"
-
-		while IFS= read -r line ; do
-			line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-			[ -z "$line" ] && continue
-			echo "$line" | grep -q '^[[:space:]]*#' && continue
-			echo "$line"
-		done < "$file"
+		__filter_comments < "$file"
 	fi
 }
 
