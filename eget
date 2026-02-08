@@ -64,8 +64,6 @@ eget()
 	(unset EGET_IPFS_GATEWAY; unset EGET_IPFS_API ; unset EGET_IPFS_DB ; EGET_BACKEND=$ORIG_EGET_BACKEND $CMDSHELL $bashopt $PROGDIR/$PROGNAME "$@" )
 }
 
-# TODO:
-arch="$(uname -m)"
 
 # copied from eepm project
 
@@ -591,7 +589,7 @@ while [ -n "$1" ] ; do
             USEOUTPUTDIR="$argvalue"
             ;;
         -U|-A|--user-agent)
-            USERAGENT="Mozilla/5.0 (X11; Linux $arch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
+            USERAGENT="Mozilla/5.0 (X11; Linux $(uname -m)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
             ;;
         --compressed)
             compressed=1
