@@ -546,8 +546,12 @@ local argument
 local argvalue
 local count="$#"
 while [ -n "$1" ] ; do
-    argument="$(echo "$1" | cut -d= -f1)"
-    argvalue="$(echo "$1" | cut -s -d= -f2-)"
+    argument="${1%%=*}"
+    if [ "$argument" = "$1" ] ; then
+        argvalue=""
+    else
+        argvalue="${1#*=}"
+    fi
     case "$argument" in
         -h|--help)
             eget_help
