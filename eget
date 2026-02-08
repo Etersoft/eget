@@ -24,14 +24,21 @@
 
 init_eget()
 {
-PROGDIR=$(dirname "$0")
-PROGNAME=$(basename "$0")
 CMDSHELL="/bin/sh"
-[ "$PROGDIR" = "." ] && PROGDIR="$(pwd)"
-if [ "$0" = "/dev/stdin" ] || [ "$0" = "sh" ] ; then
-    PROGDIR=""
-    PROGNAME=""
-fi
+case "$0" in
+    /dev/stdin|sh)
+        PROGDIR=""
+        PROGNAME=""
+        ;;
+    */*)
+        PROGDIR="${0%/*}"
+        PROGNAME="${0##*/}"
+        ;;
+    *)
+        PROGDIR="$(pwd)"
+        PROGNAME="$0"
+        ;;
+esac
 }
 init_eget
 
@@ -2465,6 +2472,18 @@ if [ -n "$INPUTFILE" ] ; then
 	exit
 fi
 
+is_wildcard()
+{
+    case "$1" in *[*?]*|*\[*|*\]*) return 0 ;; esac
+    return 1
+}
+
+is_query_string()
+{
+    case "$1" in *\?*=*) return 0 ;; esac
+    return 1
+}
+
 # https://www.freeoffice.com/download.php?filename=freeoffice-2021-1062.x86_64.rpm
 if [ -z "$NOGLOB" ] && is_wildcard "$URL" && ! is_query_string "$URL" ; then
     fatal "Error: there are globbing symbol (*[]) in $URL. It is allowed only for mask part"
@@ -2493,18 +2512,6 @@ if [ -n "$LISTONLY" ] ; then
     done
     exit
 fi
-
-is_wildcard()
-{
-    case "$1" in *[*?]*|*\[*|*\]*) return 0 ;; esac
-    return 1
-}
-
-is_query_string()
-{
-    case "$1" in *\?*=*) return 0 ;; esac
-    return 1
-}
 
 # If there is no wildcard symbol like asterisk, just download
 if [ -z "$SEPMASK" ] && ! is_wildcard "$MASK" || is_query_string "$MASK" ; then
