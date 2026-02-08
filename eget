@@ -1930,7 +1930,7 @@ url_get_filename()
     fi
 
     # hack for redirect to the main page
-    if dirname "$loc" | grep -q "^http" ; then
+    if is_httpurl "$loc" ; then
         loc=""
     fi
 
